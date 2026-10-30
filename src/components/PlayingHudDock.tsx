@@ -1,4 +1,4 @@
-import { saveFriend } from '../lib/friendsStore';
+import { loadFriends, saveFriend } from '../lib/friendsStore';
 import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
@@ -134,6 +134,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   myNightActionRequired = false,
   myNightActionSubmitted = false,
   messageCount,
+  messages,
   isWerewolfNightVision,
   isHudCollapsed,
   cameraPreset,
@@ -166,6 +167,16 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   const [friendIds, setFriendIds] = useState<Set<string>>(() => new Set());
   const [heartCounts, setHeartCounts] = useState<Record<string, number>>({});
   const [stoneCounts, setStoneCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => void loadFriends().then((friends) => {
+      if (active) setFriendIds(new Set(friends.map((friend) => friend.id)));
+    }).catch(() => {});
+    refresh();
+    window.addEventListener('gothic-friends-changed', refresh);
+    return () => { active = false; window.removeEventListener('gothic-friends-changed', refresh); };
+  }, [localPlayer.id, selectedTargetId]);
 
   useEffect(() => {
 
@@ -267,6 +278,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   const triggerSocialAction = (target: PlayerState, action: SocialInteractionType) => {
     if (target.id === localPlayer.id) return;
     if (action === 'friend') {
+      if (friendIds.has(target.id)) return;
       void saveFriend({ playerId: target.id, name: target.name, roomCode, note: '' });
       soundEngine.playHeartChime();
       setFriendIds((prev) => {
@@ -288,6 +300,13 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       })
     );
     onInteractPlayer?.(target.id, action);
+  };
+
+  const socialPointerDown = (e: React.PointerEvent<HTMLButtonElement>, target: PlayerState, action: SocialInteractionType) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    triggerSocialAction(target, action);
   };
 
   return (
@@ -454,10 +473,12 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             <button
               type="button"
               data-testid="interact-friend-btn"
-              onClick={() => triggerSocialAction(selected3DPlayer, 'friend')}
-              aria-label="Kết bạn"
+              onPointerDown={(e) => socialPointerDown(e, selected3DPlayer, 'friend')}
+              onClick={(e) => { if (e.detail === 0) triggerSocialAction(selected3DPlayer, 'friend'); }}
+              aria-label={friendIds.has(selected3DPlayer.id) ? 'Đã kết bạn' : 'Kết bạn'}
+              aria-pressed={friendIds.has(selected3DPlayer.id)}
               title={friendIds.has(selected3DPlayer.id) ? 'Đã kết bạn' : 'Kết bạn'}
-              className={`${topButton} ${friendIds.has(selected3DPlayer.id) ? '!border-emerald-400/60 !text-emerald-300' : ''}`}
+              className={`${topButton} touch-none ${friendIds.has(selected3DPlayer.id) ? '!bg-emerald-950 !border-emerald-400/60 !text-emerald-300' : ''}`}
             >
               {friendIds.has(selected3DPlayer.id) ? (
                 <UserCheck className="w-3.5 h-3.5" />
@@ -470,10 +491,11 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             <button
               type="button"
               data-testid="interact-heart-btn"
-              onClick={() => triggerSocialAction(selected3DPlayer, 'heart')}
+              onPointerDown={(e) => socialPointerDown(e, selected3DPlayer, 'heart')}
+              onClick={(e) => { if (e.detail === 0) triggerSocialAction(selected3DPlayer, 'heart'); }}
               aria-label="Thả tym"
               title="Thả tym"
-              className={`${topButton} gap-1 !text-rose-300`}
+              className={`${topButton} touch-none gap-1 !text-rose-300`}
             >
               <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-400" />
               {(heartCounts[selected3DPlayer.id] || 0) > 0 && (
@@ -485,10 +507,11 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             <button
               type="button"
               data-testid="interact-stone-btn"
-              onClick={() => triggerSocialAction(selected3DPlayer, 'stone')}
+              onPointerDown={(e) => socialPointerDown(e, selected3DPlayer, 'stone')}
+              onClick={(e) => { if (e.detail === 0) triggerSocialAction(selected3DPlayer, 'stone'); }}
               aria-label="Ném đá"
               title="Ném đá"
-              className={`${topButton} gap-1`}
+              className={`${topButton} touch-none gap-1`}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -856,7 +879,23 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           </div>
         )}
 
-        {/* 4. Bottom Dock: Icon-Only Mic + Quick Text Toggle + Inline Text Input + Icon-Only Chat */}
+        {messages.length > 0 && (
+          <details data-testid="latest-chat-preview" className="w-full rounded-xl border border-white/15 bg-[#110d19]/95 text-xs text-slate-200">
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 py-2">
+              <MessageSquare aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#e8cd82]" />
+              <span className="min-w-0 flex-1 truncate"><strong className="text-[#e8cd82]">{messages[messages.length - 1].senderName}: </strong>{messages[messages.length - 1].text}</span>
+              <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            </summary>
+            <div className="space-y-2 border-t border-white/10 px-3 py-2">
+              <div className="modal-scroll max-h-28 space-y-2 overflow-y-auto">
+                {messages.slice(-4).map((message) => <p key={message.id} className="break-words leading-relaxed"><strong className="text-[#e8cd82]">{message.senderName}: </strong>{message.text}</p>)}
+              </div>
+              <button type="button" onClick={onOpenChatDrawer} className="min-h-8 text-xs font-semibold text-[#e8cd82]">Xem tất cả tin nhắn</button>
+            </div>
+          </details>
+        )}
+
+        {/* Bottom Dock */}
         <div className="rounded-2xl bg-[#110d19]/95 border border-[#d4af37]/40 p-1.5 shadow-2xl flex items-center gap-1.5">
           {/* Button 1: Mic Toggle (Icon-Only, No Text) */}
           <button

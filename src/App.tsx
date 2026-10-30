@@ -544,6 +544,7 @@ export default function App() {
         onIntroComplete={() => setIsIntroPlaying(false)}
         phase={roomState.phase}
         players={roomState.players}
+        messages={roomState.messages}
         localPlayerId={localPlayer.id}
         selectedTargetId={selectedTargetId}
         dayVotes={roomState.dayVotes}

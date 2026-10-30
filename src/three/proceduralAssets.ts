@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CharacterAppearance, CircleObstacle } from '../game/rules';
+import { speechLines } from '../game/chatBubbles';
 
 /**
  * Procedural CanvasTexture generators (Zero external image 404s).
@@ -1549,15 +1550,16 @@ export function createPlayerLabelSprite(
   isLocal: boolean,
   isSelected = false,
   compact = false,
-  isHost = false
+  isHost = false,
+  speech?: string
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = compact ? 320 : 384;
-  canvas.height = compact ? 72 : 112;
+  canvas.height = compact ? (speech ? 160 : 72) : 112;
   const ctx = canvas.getContext('2d')!;
 
   if (compact) {
-    return createCompactPlayerLabelSprite(canvas, ctx, name, isAlive, isSpeaking, voteCount, isLocal, isSelected, isHost);
+    return createCompactPlayerLabelSprite(canvas, ctx, name, isAlive, isSpeaking, voteCount, isLocal, isSelected, isHost, speech);
   }
 
   // Dark Gothic plaque background
@@ -1653,7 +1655,8 @@ function createCompactPlayerLabelSprite(
   voteCount: number,
   isLocal: boolean,
   isSelected: boolean,
-  isHost: boolean
+  isHost: boolean,
+  speech?: string
 ): THREE.Sprite {
   const w = canvas.width;
   const h = canvas.height;
@@ -1694,7 +1697,17 @@ function createCompactPlayerLabelSprite(
   }
   const textLeft = isHost ? 64 : 12;
   const textRight = isSpeaking && isAlive ? w - 48 : w - 12;
-  ctx.fillText(displayName, (textLeft + textRight) / 2, h / 2 + 1, textRight - textLeft);
+  if (speech) {
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 20px "Be Vietnam Pro", sans-serif';
+    ctx.fillStyle = '#e8cd82';
+    ctx.fillText(displayName, textLeft, 29, textRight - textLeft);
+    ctx.font = '500 23px "Be Vietnam Pro", sans-serif';
+    ctx.fillStyle = '#f8fafc';
+    speechLines(speech).forEach((line, index) => ctx.fillText(line, 16, 65 + index * 31, w - 32));
+  } else {
+    ctx.fillText(displayName, (textLeft + textRight) / 2, h / 2 + 1, textRight - textLeft);
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -1705,7 +1718,7 @@ function createCompactPlayerLabelSprite(
     depthWrite: false,
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(isSelected ? 2.9 : 2.7, isSelected ? 0.66 : 0.61, 1);
+  sprite.scale.set(isSelected ? 2.9 : 2.7, speech ? 1.35 : isSelected ? 0.66 : 0.61, 1);
   mat.fog = false;
   mat.toneMapped = false;
   if (isSpeaking && isAlive) {
@@ -1731,12 +1744,12 @@ function createCompactPlayerLabelSprite(
     micTexture.colorSpace = THREE.SRGBColorSpace;
     const mic = new THREE.Sprite(new THREE.SpriteMaterial({ map: micTexture, transparent: true, fog: false, toneMapped: false, depthTest: true, depthWrite: false }));
     mic.name = 'speaking_mic';
-    mic.scale.set(0.1, 0.75, 1);
-    mic.position.set(0.41, 0, 0.01);
+    mic.scale.set(0.1, speech ? 0.32 : 0.75, 1);
+    mic.position.set(0.41, speech ? 0.32 : 0, 0.01);
     mic.renderOrder = 11;
     sprite.add(mic);
   }
-  sprite.position.set(0, 3.4, 0);
+  sprite.position.set(0, speech ? 3.8 : 3.4, 0);
   sprite.renderOrder = 10;
   return sprite;
 }

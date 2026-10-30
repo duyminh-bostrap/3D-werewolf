@@ -25,6 +25,9 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* Private storage may be unavailable. */ }
 }
+function notifyFriendsChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('gothic-friends-changed'));
+}
 function readLocal(): FriendEntry[] {
   const key = storageKey();
   if (owner && !read<boolean>('gothic_friends_migrated', false)) {
@@ -88,6 +91,7 @@ export function saveFriend(input: { name: string; roomCode: string; note: string
     const friend = { id: input.playerId || existing?.id || `f_${crypto.randomUUID()}`, name, roomCode: input.roomCode.trim().toUpperCase().slice(0, 12), note: input.note.trim().slice(0, 80), createdAt: existing?.createdAt ?? now, lastSeenAt: now };
     const next = [friend, ...local.filter((f) => f.id !== friend.id)];
     write(storageKey(), next); queue({ id: friend.id, friend });
+    notifyFriendsChanged();
     try { await flush(); } catch { /* Retry pending edits on the next load. */ }
     return next;
   });
@@ -97,6 +101,7 @@ export function removeFriend(id: string): Promise<FriendEntry[]> {
     await identifyOwner();
     const next = readLocal().filter((f) => f.id !== id);
     write(storageKey(), next); queue({ id });
+    notifyFriendsChanged();
     try { await flush(); } catch { /* Retry pending edits on the next load. */ }
     return next;
   });

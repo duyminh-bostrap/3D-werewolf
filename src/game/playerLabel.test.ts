@@ -26,6 +26,17 @@ test('night nameplates stay readable and only living speakers receive a separate
         }
       });
     }
+    const bubble = createPlayerLabelSprite('Lan', '', 0, true, true, 0, false, false, true, false, 'Xin chào mọi người');
+    assert.equal(bubble.material.fog, false);
+    assert.equal(bubble.scale.y, 1.35);
+    assert.ok(bubble.position.y - bubble.scale.y / 2 > 2.95);
+    assert.ok(bubble.getObjectByName('speaking_mic'));
+    bubble.traverse((object) => {
+      if (object instanceof THREE.Sprite) {
+        object.material.map?.dispose();
+        object.material.dispose();
+      }
+    });
   } finally {
     globalThis.document = original;
   }

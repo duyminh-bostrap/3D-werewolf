@@ -5,6 +5,8 @@ import { advanceTrialVisual, type TrialVisual } from '../game/trialVisual';
 import { followCameraPose } from '../game/followCamera';
 import { CameraDrag } from '../game/cameraDrag';
 import React, { useEffect, useRef } from 'react';
+import type { ChatMessage } from '../../server';
+import { activeChatBubbles } from '../game/chatBubbles';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
@@ -37,6 +39,7 @@ export interface GothicVillageSceneProps {
   onIntroComplete: () => void;
   phase: GamePhase;
   players: PlayerState[];
+  messages?: ChatMessage[];
   localPlayerId: string;
   selectedTargetId: string | null;
   dayVotes: Record<string, string>;
@@ -76,6 +79,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
   onIntroComplete,
   phase,
   players,
+  messages = [],
   localPlayerId,
   selectedTargetId,
   dayVotes,
@@ -97,6 +101,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     onIntroComplete,
     phase,
     players,
+    messages,
     localPlayerId,
     selectedTargetId,
     dayVotes,
@@ -117,6 +122,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       onIntroComplete,
       phase,
       players,
+      messages,
       localPlayerId,
       selectedTargetId,
       dayVotes,
@@ -135,6 +141,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     onIntroComplete,
     phase,
     players,
+    messages,
     localPlayerId,
     selectedTargetId,
     dayVotes,
@@ -584,6 +591,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       }
 
       const compactLabels = true;
+      const chatBubbles = activeChatBubbles(latestPropsRef.current.messages, Date.now());
 
       currentPlayers.forEach((p, idx) => {
         const isWolfBeast =
@@ -595,7 +603,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         const sig = `${JSON.stringify(p.appearance)}_${isWolfBeast}_${p.isAlive}`;
         const vCount = voteCounts[p.id] || 0;
         const isSelected = selectedId === p.id;
-        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}_${compactLabels ? 'c' : 'f'}_${p.isHost}`;
+        const speech = chatBubbles.get(p.id);
+        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}_${compactLabels ? 'c' : 'f'}_${p.isHost}_${speech?.id ?? ''}`;
 
         let entry = avatarMap.get(p.id);
         if (!entry || entry.signature !== sig) {
@@ -629,7 +638,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             p.id === localId,
             isSelected,
             compactLabels,
-            p.isHost
+            p.isHost,
+            speech?.text
           );
           newGroup.add(labelSprite);
 
@@ -674,7 +684,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             p.id === localId,
             isSelected,
             compactLabels,
-            p.isHost
+            p.isHost,
+            speech?.text
           );
           entry.group.add(updatedSprite);
           entry.labelSprite = updatedSprite;

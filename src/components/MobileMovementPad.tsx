@@ -64,6 +64,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
 
   const handleStickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('[data-dpad-btn="true"]')) return;
+    if (activePointerIdRef.current !== null) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     activePointerIdRef.current = e.pointerId;
@@ -76,8 +77,10 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     updateStickFromPointer(e.clientX, e.clientY);
   };
 
-  const resetStick = () => {
+  const resetStick = (e: React.PointerEvent<HTMLElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
     activePointerIdRef.current = null;
+    setActiveDpad(null);
     setIsDraggingStick(false);
     setKnobPos({ x: 0, y: 0 });
     inputRef.current.moveX = 0;
@@ -105,11 +108,13 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     }
   };
 
-  const stopDpadDirection = () => {
-    setActiveDpad(null);
-    setKnobPos({ x: 0, y: 0 });
-    inputRef.current.moveX = 0;
-    inputRef.current.moveZ = 0;
+  const beginDpad = (e: React.PointerEvent<HTMLButtonElement>, dir: 'up' | 'down' | 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (activePointerIdRef.current !== null) return;
+    activePointerIdRef.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    startDpadDirection(dir);
   };
 
   const handleTriggerJump = () => {
@@ -147,6 +152,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
   };
 
   const handleEyePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (eyePointerIdRef.current !== null) return;
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -161,7 +167,8 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     updateEyeFromPointer(e.clientX, e.clientY);
   };
 
-  const releaseEye = () => {
+  const releaseEye = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (eyePointerIdRef.current !== e.pointerId) return;
     eyePointerIdRef.current = null;
     eyeLastPointRef.current = null;
     setIsDraggingEye(false);
@@ -206,12 +213,10 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
               data-dpad-btn="true"
               data-testid="dpad-up-btn"
               aria-label="Di chuyển tiến lên"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                startDpadDirection('up');
-              }}
-              onPointerUp={stopDpadDirection}
-              onPointerLeave={stopDpadDirection}
+              onPointerDown={(e) => beginDpad(e, 'up')}
+              onPointerUp={resetStick}
+              onPointerCancel={resetStick}
+              onLostPointerCapture={resetStick}
               className={`absolute top-0 left-1/2 -translate-x-1/2 w-8 h-6 flex items-center justify-center rounded-t-full transition-colors cursor-pointer ${
                 activeDpad === 'up' ? 'text-[#d4af37]' : 'text-slate-300/60 hover:text-white'
               }`}
@@ -224,12 +229,10 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
               data-dpad-btn="true"
               data-testid="dpad-down-btn"
               aria-label="Di chuyển lùi lại"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                startDpadDirection('down');
-              }}
-              onPointerUp={stopDpadDirection}
-              onPointerLeave={stopDpadDirection}
+              onPointerDown={(e) => beginDpad(e, 'down')}
+              onPointerUp={resetStick}
+              onPointerCancel={resetStick}
+              onLostPointerCapture={resetStick}
               className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-6 flex items-center justify-center rounded-b-full transition-colors cursor-pointer ${
                 activeDpad === 'down' ? 'text-[#d4af37]' : 'text-slate-300/60 hover:text-white'
               }`}
@@ -242,12 +245,10 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
               data-dpad-btn="true"
               data-testid="dpad-left-btn"
               aria-label="Di chuyển sang trái"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                startDpadDirection('left');
-              }}
-              onPointerUp={stopDpadDirection}
-              onPointerLeave={stopDpadDirection}
+              onPointerDown={(e) => beginDpad(e, 'left')}
+              onPointerUp={resetStick}
+              onPointerCancel={resetStick}
+              onLostPointerCapture={resetStick}
               className={`absolute left-0 top-1/2 -translate-y-1/2 w-6 h-8 flex items-center justify-center rounded-l-full transition-colors cursor-pointer ${
                 activeDpad === 'left' ? 'text-[#d4af37]' : 'text-slate-300/60 hover:text-white'
               }`}
@@ -260,12 +261,10 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
               data-dpad-btn="true"
               data-testid="dpad-right-btn"
               aria-label="Di chuyển sang phải"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                startDpadDirection('right');
-              }}
-              onPointerUp={stopDpadDirection}
-              onPointerLeave={stopDpadDirection}
+              onPointerDown={(e) => beginDpad(e, 'right')}
+              onPointerUp={resetStick}
+              onPointerCancel={resetStick}
+              onLostPointerCapture={resetStick}
               className={`absolute right-0 top-1/2 -translate-y-1/2 w-6 h-8 flex items-center justify-center rounded-r-full transition-colors cursor-pointer ${
                 activeDpad === 'right' ? 'text-[#d4af37]' : 'text-slate-300/60 hover:text-white'
               }`}
