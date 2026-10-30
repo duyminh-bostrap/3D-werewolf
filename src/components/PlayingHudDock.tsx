@@ -59,6 +59,7 @@ interface PlayingHudDockProps {
   lastProtectedId: string | null;
   wolfTargetId: string | null;
   seerInspection: { targetId: string; isWerewolf: boolean; role: RoleId } | null;
+  littleGirlClue?: string | null;
   dayVotes: Record<string, string>;
   accusedPlayerId?: string | null;
   trialVotes?: Record<string, 'kill' | 'save'>;
@@ -123,6 +124,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   lastProtectedId,
   wolfTargetId,
   seerInspection,
+  littleGirlClue,
   dayVotes,
   accusedPlayerId = null,
   trialVotes = {},
@@ -159,13 +161,10 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   onVoiceStateChange,
 }) => {
   const [cupidFirstId, setCupidFirstId] = useState<string | null>(null);
-  const [littleGirlClue, setLittleGirlClue] = useState<string | null>(null);
   const [quickChatInput, setQuickChatInput] = useState('');
   const [showQuickPresets, setShowQuickPresets] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [friendIds, setFriendIds] = useState<Set<string>>(() => new Set());
-  const [heartCounts, setHeartCounts] = useState<Record<string, number>>({});
-  const [stoneCounts, setStoneCounts] = useState<Record<string, number>>({});
   const bottomDockRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -195,7 +194,6 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
 
   useEffect(() => {
 
-    setLittleGirlClue(null);
     setCupidFirstId(null);
   }, [phase, dayNumber]);
 
@@ -303,10 +301,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       });
     } else if (action === 'heart') {
       soundEngine.playHeartChime();
-      setHeartCounts((prev) => ({ ...prev, [target.id]: (prev[target.id] || 0) + 1 }));
     } else if (action === 'stone') {
       soundEngine.playStoneThrow();
-      setStoneCounts((prev) => ({ ...prev, [target.id]: (prev[target.id] || 0) + 1 }));
     }
 
     window.dispatchEvent(
@@ -459,6 +455,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           </div>
         </div>
 
+        <div data-testid="hud-secondary-row" className="grid w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
         {!isLobby && phase !== 'ended' && (
           <button
             type="button"
@@ -466,7 +463,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             aria-label={`Xem lá bài của bạn: ${roleMeta.nameVi}`}
             title={roleMeta.nameVi}
             data-testid="open-role-card-btn"
-            className="pointer-events-auto absolute left-3 top-[72px] flex h-[68px] w-14 items-center justify-center rounded-lg border border-[#d4af37]/60 bg-[#110d19]/95 p-1 shadow-lg transition-colors hover:bg-[#342640] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+            className="pointer-events-auto col-start-1 row-start-1 flex h-11 w-11 items-center justify-center rounded-xl border border-[#d4af37]/35 bg-[#110d19]/95 p-1 shadow-lg transition-colors hover:bg-[#342640] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
           >
             <span aria-hidden="true" className="block h-full w-full [&_svg]:!h-full [&_svg]:!w-full">
               {renderRoleWoodcutSvg(localPlayer.role, roleMeta.accentColor)}
@@ -478,9 +475,9 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
         {selected3DPlayer && selected3DPlayer.id !== localPlayer.id && (
           <div
             data-testid="3d-character-social-bar"
-            className={`pointer-events-auto flex items-center gap-1 rounded-xl border border-[#d4af37]/35 bg-[#110d19]/95 p-1 shadow-lg ${!isLobby && phase !== 'ended' ? 'max-w-[calc(100%-72px)] self-end' : 'max-w-full'}`}
+            className="pointer-events-auto col-start-2 row-start-1 flex h-11 min-w-0 w-full items-center gap-1 rounded-xl border border-[#d4af37]/35 bg-[#110d19]/95 p-1 shadow-lg"
           >
-            <span className="min-w-0 max-w-[120px] truncate px-2 text-xs font-bold text-[#e8cd82]">
+            <span className="min-w-0 flex-1 truncate px-1 text-xs font-bold text-[#e8cd82]">
               #{selected3DPlayer.seatIndex + 1} {selected3DPlayer.name}
             </span>
 
@@ -513,9 +510,6 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               className={`${topButton} touch-none gap-1 !text-rose-300`}
             >
               <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-400" />
-              {(heartCounts[selected3DPlayer.id] || 0) > 0 && (
-                <span>{heartCounts[selected3DPlayer.id]}</span>
-              )}
             </button>
 
             {/* 3. Ném Đá (Throw Stone) */}
@@ -536,9 +530,6 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               >
                 <polygon points="6,4 16,3 21,10 18,19 8,20 3,13" />
               </svg>
-              {(stoneCounts[selected3DPlayer.id] || 0) > 0 && (
-                <span>{stoneCounts[selected3DPlayer.id]}</span>
-              )}
             </button>
 
             {/* Close Selection */}
@@ -552,8 +543,11 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             </button>
           </div>
         )}
+          <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} className={`pointer-events-auto col-start-3 row-start-1 flex h-11 w-11 items-center justify-center rounded-xl border ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#110d19]/95 border-[#d4af37]/35 text-amber-200 hover:bg-[#2a203b]'}`}>
+            <Mountain className="h-5 w-5" />
+          </button>
+        </div>
       </div>
-
       {/* Bottom HUD Area: Ultra-Compact Icon-First Phase Bar + Mic/Chat Dock */}
       <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
         {!isHudCollapsed && (
@@ -603,10 +597,10 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                       {localPlayer.role === 'seer'
                         ? seerInspection.isWerewolf
                           ? 'SÓI!'
-                          : ROLE_CATALOG[seerInspection.role].nameVi
+                          : 'Không phải Sói'
                         : seerInspection.role !== 'villager'
-                        ? 'Tà'
-                        : 'Dân'}
+                        ? 'Có chức năng'
+                        : 'Dân thường'}
                     </span>
                   )}
 
@@ -637,17 +631,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                 {localPlayer.role === 'little_girl' && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const wolves = alivePlayers.filter((p) => isWolfPackRole(p.role));
-                      const others = alivePlayers.filter(
-                        (p) => !isWolfPackRole(p.role) && p.id !== localPlayer.id
-                      );
-                      const suspect1 = wolves[0]?.name || '?';
-                      const suspect2 = others[0]?.name || '?';
-                      setLittleGirlClue(`${suspect1}/${suspect2}`);
-                      onSubmitNightAction('little_girl_peek');
-
-                    }}
+                    onClick={() => onSubmitNightAction('little_girl_peek')}
                     title="Rình"
                     className="w-7 h-7 rounded-lg bg-sky-950/90 hover:bg-sky-900 text-sky-200 border border-sky-400/50 flex items-center justify-center cursor-pointer"
                   >
@@ -1046,9 +1030,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           </button>
           )}
 
-          <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} title={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} className={`fixed right-3 top-16 z-30 w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#1e172a] border-white/15 text-amber-200 hover:bg-[#2a203b]'}`}>
-            <Mountain className="w-5 h-5" />
-          </button>
+
 
           {/* Minimal Icon-Only Collapse Toggle for Night/Day Action Pill */}
           {(phase === 'night' || phase === 'day_discussion' || phase === 'day_voting') && (

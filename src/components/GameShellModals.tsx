@@ -488,6 +488,7 @@ export const PauseModal: React.FC<PauseModalProps> = ({
 };
 
 interface GameOverModalProps {
+  nightRecaps?: Array<{ night: number; lines: string[] }>;
   winner: 'ongoing' | Faction;
   winReason: string;
   dayNumber: number;
@@ -498,6 +499,7 @@ interface GameOverModalProps {
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
+  nightRecaps = [],
   winner,
   winReason,
   dayNumber,
@@ -563,6 +565,17 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </div>
           </dl>
 
+          {nightRecaps.length > 0 && <section aria-label="Tóm tắt ván đấu" className="space-y-2">
+            <h3 className="text-xs font-semibold text-[#e8cd82]">Chuyện đã xảy ra</h3>
+            <div className="space-y-2">
+              {nightRecaps.map((recap) => <details key={recap.night} open={nightRecaps.length <= 3} className="rounded-xl border border-white/10 bg-[#1a1524]">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-slate-100">Đêm {recap.night}</summary>
+                <ul className="space-y-2 border-t border-white/10 px-3 py-3 text-xs leading-relaxed text-slate-300">
+                  {recap.lines.map((line, index) => <li key={index}>{line}</li>)}
+                </ul>
+              </details>)}
+            </div>
+          </section>}
           <section aria-label="Kết quả người chơi" className="space-y-2">
             <h3 className="text-xs font-semibold text-slate-400">Người chơi · {players.length}</h3>
             <ul className="divide-y divide-white/5 rounded-xl border border-white/10 bg-[#0b0910]">

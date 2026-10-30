@@ -1,6 +1,7 @@
 import { canSeeWolfOutline } from '../game/wolfOutline';
 import { introTourAngle, INTRO_TOUR_SECONDS } from '../game/introTour';
 import { newlyDeadPlayers } from '../game/deathNotifications';
+import { deathPresentation } from '../game/deathPresentation';
 import { advanceTrialVisual, type TrialVisual } from '../game/trialVisual';
 import { followCameraPose } from '../game/followCamera';
 import { CameraDrag } from '../game/cameraDrag';
@@ -304,6 +305,16 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     let previousLife: Map<string, boolean> | null = null;
     const deathQueue: string[] = [];
     let deathFocus: { playerId: string; startedAt: number } | null = null;
+    const deathEffects = new Map<string, { group: THREE.Group; ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; badge: THREE.Sprite; startedAt: number }>();
+    const clearDeathEffect = (id: string) => {
+      const effect = deathEffects.get(id);
+      if (!effect) return;
+      scene.remove(effect.group);
+      effect.ring.geometry.dispose();
+      effect.ring.material.dispose();
+      disposePlayerLabel(effect.badge);
+      deathEffects.delete(id);
+    };
 
     // Interactive 3D Kickable Fireball ("Quả Cầu Lửa") in the Village Square
     const fireballRig = createKickableFireball(scene);
@@ -850,7 +861,12 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         localVelY = 0;
       }
 
-      if (!props.isTitleScreen && previousLife) {
+      if (props.isTitleScreen || props.phase === 'lobby') {
+        deathQueue.length = 0;
+        deathFocus = null;
+        for (const id of deathEffects.keys()) clearDeathEffect(id);
+      }
+      if (!props.isTitleScreen && props.phase !== 'lobby' && previousLife) {
         const deaths = newlyDeadPlayers(previousLife, props.players);
         deaths.sort((a, b) => Number(b.id === trialVisual?.playerId) - Number(a.id === trialVisual?.playerId));
         deathQueue.push(...deaths.map((p) => p.id));
@@ -858,6 +874,20 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       previousLife = props.isTitleScreen ? null : new Map(props.players.map((p) => [p.id, p.isAlive]));
       if (deathFocus && elapsed - deathFocus.startedAt >= 3.5) deathFocus = null;
       if (!deathFocus && deathQueue.length) deathFocus = { playerId: deathQueue.shift()!, startedAt: elapsed };
+      if (deathFocus && !deathEffects.has(deathFocus.playerId)) {
+        const player = props.players.find((p) => p.id === deathFocus!.playerId);
+        if (player) {
+          const presentation = deathPresentation(player);
+          const group = new THREE.Group();
+          const ring = new THREE.Mesh(new THREE.RingGeometry(0.65, 0.85, 32), new THREE.MeshBasicMaterial({ color: presentation.color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.y = 0.08;
+          const badge = createPlayerLabelSprite(player.name, '', player.seatIndex, false, false, 0, false, false, true, false, presentation.caption);
+          group.add(ring, badge);
+          scene.add(group);
+          deathEffects.set(player.id, { group, ring, badge, startedAt: elapsed });
+        }
+      }
 
       const previousAccused = trialVisual && props.players.find((p) => p.id === trialVisual!.playerId);
       trialVisual = advanceTrialVisual(trialVisual, props.phase, props.accusedPlayerId, previousAccused?.isAlive ?? true, elapsed);
@@ -888,6 +918,16 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
       const dampFactor = 1 - Math.exp(-10 * dt);
       for (const [id, entry] of avatarMap.entries()) {
+        const effect = deathEffects.get(id);
+        entry.labelSprite.visible = !effect;
+        if (effect) {
+          const age = elapsed - effect.startedAt;
+          effect.group.position.copy(entry.group.position);
+          effect.ring.scale.setScalar(1 + age * 0.65);
+          effect.ring.material.opacity = Math.max(0, 0.9 - age / 4);
+          effect.badge.material.opacity = Math.min(1, Math.max(0, (3.5 - age) * 2));
+          if (age >= 3.5) { clearDeathEffect(id); entry.labelSprite.visible = true; }
+        }
         const speakingMic = entry.labelSprite.getObjectByName('speaking_mic') as THREE.Sprite | undefined;
         if (speakingMic) speakingMic.material.opacity = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(elapsed * 9));
         const prevX = entry.group.position.x;
@@ -1340,6 +1380,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       clearTimeout(frameId);
       pointingHand.traverse((object) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
       wolfOutlineMaterial.dispose();
+      for (const id of deathEffects.keys()) clearDeathEffect(id);
       for (const entry of avatarMap.values()) disposePlayerLabel(entry.labelSprite);
       gloveMaterial.dispose();
       sleeveMaterial.dispose();

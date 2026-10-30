@@ -120,7 +120,7 @@ Hiện room/game ID và Supabase Auth ID là hai hệ nhận diện khác nhau; 
 | Tiên Tri Hào Quang | Soi hào quang | Chỉ thông tin theo chức năng, không trả toàn bộ role cho người không có quyền |
 | Bảo Vệ | Chọn người bảo vệ | Không bảo vệ cùng mục tiêu hai đêm liên tiếp; có thể tự chọn |
 | Phù Thủy | Cứu hoặc độc hoặc bỏ qua | Bình cứu/độc mỗi loại một lần/ ván; không hồi lại mỗi đêm |
-| Thợ Săn | Chọn trước mục tiêu báo thù | Dùng nếu chết trong đêm; báo thù khi bị xử tử ban ngày chưa hoàn tất |
+| Thợ Săn | Chọn trước mục tiêu báo thù | Lưu riêng từng người, dùng khi chết trong đêm hoặc bị xử ban ngày; giải quyết cả chuỗi báo thù/người tình |
 | Thần Tình Ái | Chọn hai người khác nhau | Chỉ đêm 1 và khi chưa có cặp; cả hai còn sống |
 | Cô Bé | Rình hoặc bỏ qua | Kết quả rình là riêng tư; thuật toán manh mối cần chốt |
 | Già Làng | Không quyết định chủ động | Chặn nhát cắn đầu tiên; không chặn độc/xử tử |
@@ -265,18 +265,18 @@ Mỗi action xác nhận nên có phản hồi accepted/rejected, mã lỗi và 
 
 | Ưu tiên | Phát hiện có bằng chứng | Ảnh hưởng / hướng sửa |
 |---|---|---|
-| P0 | `serializeRoomState` trả toàn bộ `players` có role, cùng lovers/witchState/seerInspection/wolfTargetId cho mọi viewer | Vai bí mật có thể đọc từ mạng; cần public DTO và private payload theo viewer; chỉnh client outline/rình dựa trên quyền hợp lệ |
+| P0 | `serializeRoomState` vẫn trả toàn bộ `players` có role, lovers/wolfTargetId và logs; thuốc, kết quả soi và manh mối Cô Bé đã tách theo viewer | Vai bí mật còn có thể đọc từ mạng; cần public DTO và private payload đầy đủ theo viewer |
 | P0 | WebSocket nhận `playerId` từ client, chưa xác minh token Supabase hoặc quyền sở hữu ID | Có thể giả danh/chiếm phiên; cần xác thực kết nối và gắn socket với principal server xác minh |
 | P0 | Nhiều lệnh set count/add bot/kick/promote/update deck/reset/resolve trial thiếu kiểm tra host; còn RPC resolve trial | Người không có quyền có thể thay phòng/kết thúc sớm; kiểm tra quyền từng lệnh, bỏ đường cưỡng chế khỏi production |
 | P0 | Nhánh join ván đang chạy thêm người mới với role villager, không có spectator roster | Làm thay số người sống/vote giữa ván; chặn tham gia chơi, tách danh sách chờ |
 | P1 | `role_reveal` đổi cả phòng theo lần confirm đầu tiên, không có xác nhận riêng/timeout | Có người chưa xem bài; thêm barrier hoặc modal riêng tồn tại qua chuyển pha |
-| P1 | Night action kiểm tra trạng thái acted nhưng nhiều nhánh chưa kiểm tra đầy đủ action enum, target alive, thuốc và Cupid hợp lệ trước mark acted | Có thể nhận sai lựa chọn rồi khóa người chơi; cần validate trước mutate và trả lỗi |
-| P1 | Kết quả soi và mục tiêu chức năng dùng trường chung cho nhiều người cùng vai | Người xác nhận được đếm riêng nhưng lựa chọn/kết quả có thể ghi đè nhau; chuyển sang map theo actor hoặc giới hạn một bản vai |
-| P1 | Hunter ban ngày chỉ trả `hunterTriggeredId`; server không thực hiện nhánh báo thù tương ứng | Lá bài hứa chức năng chưa hoàn chỉnh; triển khai phase/action báo thù hoặc điều chỉnh luật có xác nhận |
+| Đã sửa | Night action validate chung trước mutate, gồm role, target sống, self/đồng đội, thuốc, Cupid và acted | Unit test và kiểm tra WebSocket trong `role-flow-test.cjs` |
+| Đã sửa | Kết quả soi, mục tiêu bảo vệ/báo thù, thuốc và hành động Witch lưu theo actor | Hai Tiên Tri/hai Phù Thủy đã kiểm tra bằng kết nối riêng |
+| Đã sửa | Hunter báo thù cả ngày lẫn đêm, xử lý tiếp chuỗi Hunter/người tình | Dùng mục tiêu đêm đã xác nhận; không thêm pha chọn sau khi chết |
 | P1 | Thời điểm cứu của Witch dùng `room.wolfTargetId` có thể thay đổi trước tổng kết phiếu Sói | Cần chốt mô hình đêm đồng thời hoặc chia lượt Sói→Witch; không mô tả đang có lượt tuần tự |
 | P1 | Ready không được reset đầy đủ sau ván; toggle-ready không giới hạn lobby | Có thể tự sẵn sàng ván mới; chỉ nhận ở lobby và reset người không host |
 | P1 | Đổi phòng trong lobby chưa chuyển host cho phòng cũ; chuỗi kick chưa dọn socket tương ứng | Cần cùng một routine rời phòng/kick, bảo đảm thành viên và host nhất quán |
-| P1 | Bán Sói metadata ghi faction werewolves nhưng logic chưa hóa không tính Sói; Aura Seer so role != villager coi cả vai làng có chức năng là “Tà” | Chốt ý nghĩa phe/hào quang rồi đồng bộ metadata, UI và rule |
+| P1 / đã sửa một phần | Bán Sói metadata vẫn ghi faction werewolves nhưng logic chưa hóa không tính Sói; Aura Seer đã hiển thị “Có chức năng / Dân thường” | Cần chốt phân nhóm Bán Sói; hào quang không còn diễn giải sai thành phe Tà |
 | P1 | Không còn ai sống được tính Dân thắng; hòa phiếu Sói phụ thuộc thứ tự object | Cần chốt luật, thêm test trước thay đổi |
 | P2 | Các pha day_announcement/hunter_revenge và resolver `resolveDayVote` cũ không nằm trên đường server chính | Đánh dấu legacy, tránh triển khai UI theo API không còn được dùng |
 | P2 | Danh bạ là contact store; lastSeenAt là thời điểm lưu, không phải online; đã kết bạn trên HUD dùng state cục bộ riêng | Không quảng cáo presence hoặc quan hệ hai chiều; đồng bộ indicator với store nếu cần |
@@ -305,4 +305,4 @@ npm run build:prod
 
 Kiểm tra tích hợp phòng: chạy server riêng `PORT=3112`, rồi `node room-limits-test.cjs`. Script kiểm tra tạo 1 người không AI, chỉnh capacity không sinh AI, từ chối người thứ 16/thêm AI vượt giới hạn, dưới 5 không start và 5 ready có thể start.
 
-Tại thời điểm rà soát: 28 unit test đạt; TypeScript và build client/server đạt ở lần chạy gần nhất; integration giới hạn phòng đạt. Đây chưa phải nghiệm thu toàn bộ F01–F22. Chưa xác minh OAuth Google/Apple thật, RLS trên database thật, một ván nhiều người end-to-end, đa điểm cảm ứng và chất lượng hiệu ứng trên điện thoại.
+Đợt rà soát tiếp theo: xem `ROLE_AUDIT.md`. Có kiểm tra 15 role, kiểm tra WebSocket với nhiều client, metadata chết ngày/đêm và recap nhiều đêm. Đây chưa phải nghiệm thu toàn bộ F01–F22; các P0 còn mở vẫn phải được giải quyết trước phát hành công khai.

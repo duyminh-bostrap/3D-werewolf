@@ -50,6 +50,8 @@ export interface CharacterAppearance {
 }
 
 export interface PlayerState {
+  deathPeriod?: 'day' | 'night';
+  deathRound?: number;
   id: string;
   name: string;
   isHost: boolean;
@@ -779,6 +781,10 @@ export function canBodyguardProtect(
 }
 
 export interface NightActionsInput {
+  bodyguardTargets?: Record<string, string>;
+  hunterTargets?: Record<string, string>;
+  witchActions?: Record<string, { healTargetId?: string; poisonTargetId?: string }>;
+  alphaConvertTargetId?: string;
   wolfVotes: Record<string, string>; // wolfId -> victimId
   alphaConvertUsed?: boolean; // Alpha Wolf chooses to infect victim instead of killing
   whiteWolfTargetId?: string | null; // White Wolf solo kill on another wolf
@@ -829,7 +835,8 @@ export function computeNightActionProgress(
   input: NightActionsInput,
   dayNumber: number,
   witchState: WitchPotionState,
-  hasLovers: boolean
+  hasLovers: boolean,
+  witchStates: Record<string, WitchPotionState> = {}
 ): { completedCount: number; requiredCount: number; allCompleted: boolean } {
   const actedSet = new Set(input.actedPlayerIds ?? []);
   let requiredCount = 0;
@@ -837,7 +844,7 @@ export function computeNightActionProgress(
 
   for (const p of players) {
     if (!p.isAlive) continue;
-    if (!doesRoleHaveNightAction(p.role, dayNumber, witchState, hasLovers)) continue;
+    if (!doesRoleHaveNightAction(p.role, dayNumber, witchStates[p.id] ?? witchState, hasLovers)) continue;
     requiredCount += 1;
 
     let done = actedSet.has(p.id);
@@ -872,6 +879,7 @@ export function computeNightActionProgress(
 }
 
 export interface NightResolutionResult {
+  nextWitchStates?: Record<string, WitchPotionState>;
   wolfTargetId: string | null;
   savedByBodyguard: boolean;
   savedByWitch: boolean;
@@ -902,7 +910,8 @@ export function resolveNightActions(
   input: NightActionsInput,
   witchState: WitchPotionState,
   currentLovers: [string, string] | null,
-  lastProtectedId: string | null
+  lastProtectedId: string | null,
+  actorState: { witchStates?: Record<string, WitchPotionState>; lastProtected?: Record<string, string> } = {}
 ): NightResolutionResult {
   const logs: string[] = [];
   const aliveSet = new Set(players.filter((p) => p.isAlive).map((p) => p.id));
@@ -935,7 +944,7 @@ export function resolveNightActions(
   const tally = new Map<string, number>();
   for (const [wolfId, targetId] of Object.entries(input.wolfVotes)) {
     const wolf = byId.get(wolfId);
-    if (wolf && wolf.isAlive && isWolfPackRole(wolf.role) && aliveSet.has(targetId)) {
+    if (wolf && wolf.isAlive && isWolfPackRole(wolf.role) && aliveSet.has(targetId) && !isWolfPackRole(byId.get(targetId)!.role)) {
       tally.set(targetId, (tally.get(targetId) ?? 0) + 1);
     }
   }
@@ -962,8 +971,11 @@ export function resolveNightActions(
   }
 
   // 5. Evaluate Bodyguard, Cursed Wolf, Alpha Wolf Convert, Elder Shield & Witch
-  const savedByBodyguard = Boolean(wolfTargetId && wolfTargetId === validProtectedId);
+  const protectedIds = input.bodyguardTargets ? Object.entries(input.bodyguardTargets).filter(([id, target]) => byId.get(id)?.role === 'bodyguard' && aliveSet.has(id) && aliveSet.has(target) && canBodyguardProtect(actorState.lastProtected?.[id] ?? null, target)).map(([, target]) => target) : [validProtectedId];
+  const savedByBodyguard = Boolean(wolfTargetId && protectedIds.includes(wolfTargetId));
   const nextWitchState: WitchPotionState = { ...witchState };
+  const nextWitchStates = Object.fromEntries(Object.entries(actorState.witchStates ?? {}).map(([id, state]) => [id, { ...state }]));
+  const healingWitch = Object.entries(input.witchActions ?? {}).find(([id, action]) => byId.get(id)?.role === 'witch' && aliveSet.has(id) && action.healTargetId === wolfTargetId && nextWitchStates[id]?.hasHealPotion);
   let savedByWitch = false;
   let savedByElderShield = false;
   let convertedWolfId: string | null = null;
@@ -978,6 +990,7 @@ export function resolveNightActions(
       );
     } else if (
       input.alphaConvertUsed &&
+      (!input.alphaConvertTargetId || input.alphaConvertTargetId === wolfTargetId) &&
       nextWitchState.hasAlphaConvert !== false &&
       players.some((p) => p.isAlive && p.role === 'alpha_wolf')
     ) {
@@ -991,9 +1004,10 @@ export function resolveNightActions(
       logs.push(
         `Cổ ấn hộ mệnh của Già Làng ${victimObj.name} đã vỡ vụn để chặn đứng nhát cắn đầu tiên của Ma Sói!`
       );
-    } else if (input.witchSaveUsed && nextWitchState.hasHealPotion) {
+    } else if (healingWitch || (input.witchSaveUsed && nextWitchState.hasHealPotion)) {
       savedByWitch = true;
-      nextWitchState.hasHealPotion = false;
+      if (healingWitch) nextWitchStates[healingWitch[0]].hasHealPotion = false;
+      else nextWitchState.hasHealPotion = false;
     }
   }
 
@@ -1008,6 +1022,12 @@ export function resolveNightActions(
   }
 
   const deadSet = new Set<string>();
+  for (const [id, action] of Object.entries(input.witchActions ?? {})) {
+    if (byId.get(id)?.role === 'witch' && aliveSet.has(id) && action.poisonTargetId && aliveSet.has(action.poisonTargetId) && nextWitchStates[id]?.hasPoisonPotion) {
+      deadSet.add(action.poisonTargetId);
+      nextWitchStates[id].hasPoisonPotion = false;
+    }
+  }
   if (
     wolfTargetId &&
     !savedByBodyguard &&
@@ -1047,17 +1067,22 @@ export function resolveNightActions(
 
   // 7. Hunter revenge check
   const hunterTriggeredIds: string[] = [];
-  for (const deadId of Array.from(deadSet)) {
+  for (const deadId of deadSet) {
+    if (updatedLovers?.includes(deadId)) {
+      const partner = updatedLovers.find((id) => id !== deadId)!;
+      if (aliveSet.has(partner) && !deadSet.has(partner)) { deadSet.add(partner); loverHeartbreakIds.push(partner); }
+    }
     const p = byId.get(deadId);
     if (p && p.role === 'hunter') {
       hunterTriggeredIds.push(deadId);
       if (
-        input.hunterRevengeTargetId &&
-        aliveSet.has(input.hunterRevengeTargetId) &&
-        !deadSet.has(input.hunterRevengeTargetId)
+        (input.hunterTargets?.[deadId] ?? input.hunterRevengeTargetId) &&
+        aliveSet.has((input.hunterTargets?.[deadId] ?? input.hunterRevengeTargetId)!) &&
+        !deadSet.has((input.hunterTargets?.[deadId] ?? input.hunterRevengeTargetId)!)
       ) {
-        deadSet.add(input.hunterRevengeTargetId);
-        const revengeVictim = byId.get(input.hunterRevengeTargetId);
+        const target = (input.hunterTargets?.[deadId] ?? input.hunterRevengeTargetId)!;
+        deadSet.add(target);
+        const revengeVictim = byId.get(target);
         logs.push(
           `Trước lúc gục ngã, Thợ Săn ${p.name} đã bóp cò bắn hạ ${revengeVictim?.name ?? 'mục tiêu'}!`
         );
@@ -1106,6 +1131,7 @@ export function resolveNightActions(
   }
 
   return {
+    nextWitchStates,
     wolfTargetId,
     savedByBodyguard,
     savedByWitch,
@@ -1320,7 +1346,8 @@ export function resolveTrialVerdict(
   players: PlayerState[],
   accusedId: string,
   trialVotes: Record<string, 'kill' | 'save'>,
-  currentLovers: [string, string] | null
+  currentLovers: [string, string] | null,
+  hunterTargets: Record<string, string> = {}
 ): TrialVerdictResolution {
   const aliveSet = new Set(players.filter((p) => p.isAlive).map((p) => p.id));
   const byId = new Map(players.map((p) => [p.id, p]));
@@ -1399,6 +1426,17 @@ export function resolveTrialVerdict(
   }
 
   const hunterTriggeredId = accused.role === 'hunter' ? accused.id : null;
+  for (const id of deadSet) {
+    const target = hunterTargets[id];
+    if (byId.get(id)?.role === 'hunter' && target && aliveSet.has(target) && !deadSet.has(target)) {
+      deadSet.add(target);
+      logs.push(`Thợ Săn ${byId.get(id)!.name} báo thù, kéo theo ${byId.get(target)!.name}.`);
+    }
+    if (currentLovers?.includes(id)) {
+      const partner = currentLovers.find((lover) => lover !== id)!;
+      if (aliveSet.has(partner) && !deadSet.has(partner)) { deadSet.add(partner); loverHeartbreakIds.push(partner); }
+    }
+  }
 
   return {
     executedId: accusedId,

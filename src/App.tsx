@@ -633,6 +633,7 @@ export default function App() {
           lastProtectedId={roomState.lastProtectedId}
           wolfTargetId={roomState.wolfTargetId}
           seerInspection={roomState.seerInspection}
+          littleGirlClue={roomState.littleGirlClue}
           dayVotes={roomState.dayVotes}
           accusedPlayerId={roomState.accusedPlayerId}
           trialVotes={roomState.trialVotes}
@@ -819,6 +820,7 @@ export default function App() {
           dayNumber={roomState.dayNumber}
           localRole={localPlayer.role}
           players={roomState.players}
+          nightRecaps={roomState.nightRecaps}
           onPlayAgain={() => {
             sendWs({ type: 'game:reset-lobby' });
             handleStartGame();

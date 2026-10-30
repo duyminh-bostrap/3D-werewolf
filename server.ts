@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { phaseNotice } from './src/game/phaseNotice';
+import { littleGirlHint, validNightChoice } from './src/game/nightAction';
 import { createServer as createViteServer } from 'vite';
 import {
   APPEARANCE_PRESETS,
@@ -55,6 +56,8 @@ export interface ChatMessage {
 }
 
 export interface RoomPublicState {
+  littleGirlClue?: string | null;
+  nightRecaps?: Array<{ night: number; lines: string[] }>;
   roomCode: string;
   phase: GamePhase;
   dayNumber: number;
@@ -82,6 +85,11 @@ export interface RoomPublicState {
 }
 
 interface ServerRoom extends RoomPublicState {
+  witchStates?: Record<string, WitchPotionState>;
+  lastProtectedByPlayer?: Record<string, string>;
+  hunterTargets?: Record<string, string>;
+  inspections?: Record<string, NonNullable<RoomPublicState['seerInspection']>>;
+  littleGirlClues?: Record<string, string>;
   lastAnnouncedPhase?: string;
   nightActions: NightActionsInput;
   clients: Map<string, WebSocket>;
@@ -196,7 +204,8 @@ function updateNightProgressFields(room: ServerRoom) {
     room.nightActions,
     room.dayNumber,
     room.witchState,
-    Boolean(room.lovers)
+    Boolean(room.lovers),
+    room.witchStates
   );
   room.nightCompletedCount = progress.completedCount;
   room.nightRequiredCount = progress.requiredCount;
@@ -214,11 +223,13 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     maxPlayers: room.maxPlayers ?? 8,
     players: room.players,
     roleDeck: room.roleDeck,
-    witchState: room.witchState,
-    lastProtectedId: room.lastProtectedId,
+    witchState: { ...(room.witchStates?.[viewerId ?? ''] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert },
+    lastProtectedId: viewer?.role === 'bodyguard' ? room.lastProtectedByPlayer?.[viewer.id] ?? null : null,
     lovers: room.lovers,
     wolfTargetId: room.wolfTargetId,
-    seerInspection: room.seerInspection,
+    seerInspection: room.inspections?.[viewerId ?? ''] ?? null,
+    littleGirlClue: room.littleGirlClues?.[viewerId ?? ''] ?? null,
+    nightRecaps: room.phase === 'ended' ? room.nightRecaps ?? [] : [],
     dayVotes: room.dayVotes,
     accusedPlayerId: room.accusedPlayerId ?? null,
     trialVotes: room.trialVotes ?? {},
@@ -226,7 +237,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     nightCompletedCount: room.nightCompletedCount ?? 0,
     nightRequiredCount: room.nightRequiredCount ?? 0,
     allNightActionsSubmitted: room.allNightActionsSubmitted ?? false,
-    myNightActionRequired: Boolean(room.phase === 'night' && viewer?.isAlive && doesRoleHaveNightAction(viewer.role, room.dayNumber, room.witchState, Boolean(room.lovers))),
+    myNightActionRequired: Boolean(room.phase === 'night' && viewer?.isAlive && doesRoleHaveNightAction(viewer.role, room.dayNumber, room.witchStates?.[viewer.id] ?? room.witchState, Boolean(room.lovers))),
     myNightActionSubmitted: Boolean(room.phase === 'night' && viewerId && room.nightActions.actedPlayerIds?.includes(viewerId)),
     winner: room.winner,
     winReason: room.winReason,
@@ -297,60 +308,60 @@ function markPlayerActed(room: ServerRoom, playerId: string) {
   }
 }
 
-function fillBotNightActions(room: ServerRoom, humanPlayerId?: string) {
+function applyNightChoice(room: ServerRoom, actor: PlayerState, choice: { type: string; targetId?: string | null; lovers?: [string, string] }) {
+  const actionType = choice.type;
+  const targetId = choice.targetId ?? null;
+  const potions = { ...(room.witchStates?.[actor.id] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert };
+  if (!validNightChoice(actor, choice, room.players, room.dayNumber, potions, Boolean(room.lovers), room.lastProtectedByPlayer?.[actor.id] ?? null, room.nightActions.actedPlayerIds ?? [])) return;
+            if (actionType === 'skip_night_role') {
+              // Explicit skips complete only this actor's turn.
+            } else if (actor.role === 'little_girl') {
+              (room.littleGirlClues ??= {})[actor.id] = littleGirlHint(room.players, actor.id);
+            } else if (actor.role === 'cupid') {
+              room.nightActions.cupidLovers = choice.lovers!;
+            } else if (actor.role === 'witch') {
+              (room.nightActions.witchActions ??= {})[actor.id] = actionType === 'heal' ? { healTargetId: choice.targetId! } : { poisonTargetId: targetId! };
+            } else if (actor.role === 'bodyguard') {
+              (room.nightActions.bodyguardTargets ??= {})[actor.id] = targetId!;
+            } else if (actor.role === 'hunter') {
+              (room.nightActions.hunterTargets ??= {})[actor.id] = targetId!;
+            } else if (actor.role === 'seer' || actor.role === 'aura_seer') {
+              const inspected = room.players.find((p) => p.id === targetId)!;
+              (room.inspections ??= {})[actor.id] = { targetId: inspected.id, isWerewolf: isWolfPackRole(inspected.role), role: inspected.role };
+            } else if (actionType === 'white_wolf_kill') {
+              room.nightActions.whiteWolfTargetId = targetId;
+            } else if (isWolfPackRole(actor.role)) {
+              room.nightActions.wolfVotes[actor.id] = targetId!;
+              if (actionType === 'alpha_convert') {
+                room.nightActions.alphaConvertUsed = true;
+                room.nightActions.alphaConvertTargetId = targetId!;
+              }
+              const tally = new Map<string, number>();
+              for (const target of Object.values(room.nightActions.wolfVotes)) tally.set(target, (tally.get(target) ?? 0) + 1);
+              room.wolfTargetId = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+            }
+            markPlayerActed(room, actor.id);
+
+}
+
+function fillBotNightActions(room: ServerRoom) {
   const alive = room.players.filter((p) => p.isAlive);
-  if (alive.length === 0) return;
-
-  for (const bot of alive) {
-    if (!bot.isBot && bot.id === humanPlayerId) continue;
-    if (!bot.isBot) continue;
-
-    if (isWolfPackRole(bot.role) && !room.nightActions.wolfVotes[bot.id]) {
-      const nonWolves = alive.filter((p) => !isWolfPackRole(p.role));
-      if (nonWolves.length > 0) {
-        const pick = nonWolves[Math.floor(Math.random() * nonWolves.length)];
-        room.nightActions.wolfVotes[bot.id] = pick.id;
-      }
-    } else if (bot.role === 'bodyguard' && !room.nightActions.bodyguardTargetId) {
-      const candidates = alive.filter((p) =>
-        canBodyguardProtect(room.lastProtectedId, p.id)
-      );
-      if (candidates.length > 0) {
-        room.nightActions.bodyguardTargetId =
-          candidates[Math.floor(Math.random() * candidates.length)].id;
-      }
-    } else if (bot.role === 'seer' && !room.nightActions.seerTargetId) {
-      const others = alive.filter((p) => p.id !== bot.id);
-      if (others.length > 0) {
-        room.nightActions.seerTargetId =
-          others[Math.floor(Math.random() * others.length)].id;
-      }
-    } else if (bot.role === 'aura_seer' && !room.nightActions.auraSeerTargetId) {
-      const others = alive.filter((p) => p.id !== bot.id);
-      if (others.length > 0) {
-        room.nightActions.auraSeerTargetId =
-          others[Math.floor(Math.random() * others.length)].id;
-      }
-    } else if (bot.role === 'cupid' && room.dayNumber === 1 && !room.lovers && !room.nightActions.cupidLovers) {
-      if (alive.length >= 2) {
-        room.nightActions.cupidLovers = [alive[0].id, alive[1].id];
-      }
-    } else if (bot.role === 'hunter' && !room.nightActions.hunterRevengeTargetId) {
-      const others = alive.filter((p) => p.id !== bot.id);
-      if (others.length > 0) {
-        room.nightActions.hunterRevengeTargetId =
-          others[Math.floor(Math.random() * others.length)].id;
-      }
+  for (const bot of alive.filter((p) => p.isBot)) {
+    if (room.nightActions.actedPlayerIds?.includes(bot.id)) continue;
+    const others = alive.filter((p) => p.id !== bot.id);
+    const pick = (candidates: PlayerState[]) => candidates[Math.floor(Math.random() * candidates.length)]?.id;
+    let choice: { type: string; targetId?: string | null; lovers?: [string, string] } = { type: 'skip_night_role' };
+    if (isWolfPackRole(bot.role)) choice = { type: bot.role, targetId: pick(alive.filter((p) => !isWolfPackRole(p.role))) };
+    else if (bot.role === 'bodyguard') choice = { type: bot.role, targetId: pick(alive.filter((p) => canBodyguardProtect(room.lastProtectedByPlayer?.[bot.id] ?? null, p.id))) };
+    else if (['seer', 'aura_seer', 'hunter'].includes(bot.role)) choice = { type: bot.role, targetId: pick(others) };
+    else if (bot.role === 'cupid' && room.dayNumber === 1 && !room.lovers && alive.length >= 2) choice = { type: 'cupid', lovers: [alive[0].id, alive[1].id] };
+    else if (bot.role === 'little_girl') choice = { type: 'little_girl_peek' };
+    else if (bot.role === 'witch') {
+      const state = room.witchStates?.[bot.id] ?? room.witchState;
+      if (state.hasHealPotion && room.wolfTargetId) choice = { type: 'heal', targetId: room.wolfTargetId };
+      else if (state.hasPoisonPotion && Math.random() < 0.25) choice = { type: 'poison', targetId: pick(others) };
     }
-
-    if (doesRoleHaveNightAction(bot.role, room.dayNumber, room.witchState, Boolean(room.lovers))) {
-      markPlayerActed(room, bot.id);
-    }
-  }
-
-  const wolfTally = Object.values(room.nightActions.wolfVotes);
-  if (wolfTally.length > 0 && !room.wolfTargetId) {
-    room.wolfTargetId = wolfTally[0];
+    applyNightChoice(room, bot, choice);
   }
 }
 
@@ -413,6 +424,8 @@ function enterNightPhase(room: ServerRoom) {
   room.phase = 'night';
   room.wolfTargetId = null;
   room.seerInspection = null;
+  room.inspections = {};
+  room.littleGirlClues = {};
   room.accusedPlayerId = null;
   room.trialVotes = {};
   room.nightActions = createEmptyNightActions();
@@ -443,8 +456,8 @@ function enterNightPhase(room: ServerRoom) {
   broadcastRoomState(room);
 }
 
-function announceDeath(room: ServerRoom, player: PlayerState) {
-  room.messages.push({ id: `death_${Date.now()}_${player.id}`, senderId: 'system', senderName: 'Hệ thống', text: deathNotice(player), channel: 'system', timestamp: Date.now() });
+function announceDeath(room: ServerRoom, player: PlayerState, period: 'day' | 'night') {
+  room.messages.push({ id: `death_${Date.now()}_${player.id}`, senderId: 'system', senderName: 'Hệ thống', text: `${deathNotice(player)} (${period === 'night' ? 'Đêm' : 'Ngày'} ${room.dayNumber})`, channel: 'system', timestamp: Date.now() });
 }
 
 function executeResolveNight(room: ServerRoom) {
@@ -457,10 +470,15 @@ function executeResolveNight(room: ServerRoom) {
     room.nightActions,
     room.witchState,
     room.lovers,
-    room.lastProtectedId
+    room.lastProtectedId,
+    { witchStates: room.witchStates, lastProtected: room.lastProtectedByPlayer }
   );
 
   room.witchState = res.nextWitchState;
+  room.witchStates = res.nextWitchStates;
+  room.lastProtectedByPlayer = { ...room.nightActions.bodyguardTargets };
+  room.hunterTargets = { ...room.nightActions.hunterTargets };
+  (room.nightRecaps ??= []).push({ night: room.dayNumber, lines: [...res.logs] });
   room.lastProtectedId = room.nightActions.bodyguardTargetId;
   room.lovers = res.updatedLovers;
   if (room.lovers) {
@@ -484,8 +502,10 @@ function executeResolveNight(room: ServerRoom) {
   for (const deadId of res.deadPlayerIds) {
     const victim = room.players.find((p) => p.id === deadId);
     if (victim && victim.isAlive) {
-      announceDeath(room, victim);
+      announceDeath(room, victim, 'night');
       victim.isAlive = false;
+      victim.deathPeriod = 'night';
+      victim.deathRound = room.dayNumber;
       victim.isMuted = true;
       victim.isSpeaking = false;
     }
@@ -575,19 +595,24 @@ function executeResolveTrialVerdict(room: ServerRoom) {
     room.players,
     room.accusedPlayerId,
     room.trialVotes ?? {},
-    room.lovers
+    room.lovers,
+    room.hunterTargets
   );
 
   for (const deadId of verdict.deadPlayerIds) {
     const p = room.players.find((pl) => pl.id === deadId);
     if (p && p.isAlive) {
-      announceDeath(room, p);
+      announceDeath(room, p, 'day');
       p.isAlive = false;
+      p.deathPeriod = 'day';
+      p.deathRound = room.dayNumber;
       p.isMuted = true;
       p.isSpeaking = false;
     }
   }
   room.logs.push(...verdict.logs);
+  const recap = room.nightRecaps?.find((entry) => entry.night === room.dayNumber);
+  if (recap) recap.lines.push(...verdict.logs.map((line) => `Ban ngày: ${line}`));
 
   if (verdict.jesterWon) {
     const executed = room.players.find((pl) => pl.id === verdict.executedId);
@@ -1079,6 +1104,13 @@ async function startServer() {
             }
 
             room.phase = 'role_reveal';
+            room.witchStates = Object.fromEntries(room.players.filter((p) => p.role === 'witch').map((p) => [p.id, { hasHealPotion: true, hasPoisonPotion: true }]));
+            room.lastProtectedByPlayer = {};
+            room.hunterTargets = {};
+            room.inspections = {};
+            room.littleGirlClues = {};
+            room.nightRecaps = [];
+            room.players.forEach((p) => { delete p.deathPeriod; delete p.deathRound; });
             room.dayNumber = 1;
             room.witchState = {
               hasHealPotion: true,
@@ -1113,85 +1145,13 @@ async function startServer() {
           case 'game:night-action': {
             if (room.phase !== 'night') break;
             const actor = room.players.find((p) => p.id === currentPlayerId);
-            if (!actor || !actor.isAlive || room.nightActions.actedPlayerIds?.includes(actor.id) || !doesRoleHaveNightAction(actor.role, room.dayNumber, room.witchState, Boolean(room.lovers))) break;
-
-            const targetId = msg.targetId ? String(msg.targetId) : null;
+            if (!actor) break;
+            const targetId = typeof msg.targetId === 'string' ? msg.targetId : null;
             const actionType = String(msg.actionType || '');
-
-            if (actionType === 'skip_night_role') {
-              markPlayerActed(room, actor.id);
-            } else if (actionType === 'little_girl_peek' && actor.role === 'little_girl') {
-              markPlayerActed(room, actor.id);
-            } else if (actionType === 'alpha_convert' && actor.role === 'alpha_wolf' && targetId) {
-              room.nightActions.alphaConvertUsed = true;
-              room.nightActions.wolfVotes[actor.id] = targetId;
-              for (const p of room.players) {
-                if (p.isBot && p.isAlive && isWolfPackRole(p.role)) {
-                  room.nightActions.wolfVotes[p.id] = targetId;
-                  markPlayerActed(room, p.id);
-                }
-              }
-              room.wolfTargetId = targetId;
-              markPlayerActed(room, actor.id);
-            } else if (actionType === 'white_wolf_kill' && actor.role === 'white_wolf' && targetId) {
-              room.nightActions.whiteWolfTargetId = targetId;
-              markPlayerActed(room, actor.id);
-            } else if (isWolfPackRole(actor.role) && targetId) {
-              room.nightActions.wolfVotes[actor.id] = targetId;
-              for (const p of room.players) {
-                if (p.isBot && p.isAlive && isWolfPackRole(p.role)) {
-                  room.nightActions.wolfVotes[p.id] = targetId;
-                  markPlayerActed(room, p.id);
-                }
-              }
-              room.wolfTargetId = targetId;
-              markPlayerActed(room, actor.id);
-            } else if (actor.role === 'seer' && targetId) {
-              room.nightActions.seerTargetId = targetId;
-              const inspected = room.players.find((p) => p.id === targetId);
-              if (inspected) {
-                room.seerInspection = {
-                  targetId: inspected.id,
-                  isWerewolf: isWolfPackRole(inspected.role),
-                  role: inspected.role,
-                };
-              }
-              markPlayerActed(room, actor.id);
-            } else if (actor.role === 'aura_seer' && targetId) {
-              room.nightActions.auraSeerTargetId = targetId;
-              const inspected = room.players.find((p) => p.id === targetId);
-              if (inspected) {
-                room.seerInspection = {
-                  targetId: inspected.id,
-                  isWerewolf: isWolfPackRole(inspected.role),
-                  role: inspected.role,
-                };
-              }
-              markPlayerActed(room, actor.id);
-            } else if (actor.role === 'bodyguard' && targetId) {
-              if (canBodyguardProtect(room.lastProtectedId, targetId)) {
-                room.nightActions.bodyguardTargetId = targetId;
-                markPlayerActed(room, actor.id);
-              }
-            } else if (actor.role === 'witch') {
-              if (actionType === 'heal') {
-                room.nightActions.witchSaveUsed = true;
-                markPlayerActed(room, actor.id);
-              } else if (actionType === 'poison' && targetId) {
-                room.nightActions.witchPoisonTargetId = targetId;
-                markPlayerActed(room, actor.id);
-              }
-            } else if (actor.role === 'hunter' && targetId) {
-              room.nightActions.hunterRevengeTargetId = targetId;
-              markPlayerActed(room, actor.id);
-            } else if (actor.role === 'cupid' && Array.isArray(msg.lovers) && msg.lovers.length === 2) {
-              room.nightActions.cupidLovers = [
-                String(msg.lovers[0]),
-                String(msg.lovers[1]),
-              ];
-              markPlayerActed(room, actor.id);
-            }
-
+            const choice = { type: actionType, targetId: actionType === 'heal' ? room.wolfTargetId : targetId, lovers: Array.isArray(msg.lovers) && msg.lovers.length === 2 ? msg.lovers.map(String) as [string, string] : undefined };
+            const potions = { ...(room.witchStates?.[actor.id] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert };
+            if (!validNightChoice(actor, choice, room.players, room.dayNumber, potions, Boolean(room.lovers), room.lastProtectedByPlayer?.[actor.id] ?? null, room.nightActions.actedPlayerIds ?? [])) break;
+            applyNightChoice(room, actor, choice);
             updateNightProgressFields(room);
             broadcastRoomState(room);
             checkNightAutoSkip(room);
@@ -1270,6 +1230,10 @@ async function startServer() {
           case 'game:reset-lobby': {
             clearRoomTimers(room);
             room.phase = 'lobby';
+            room.nightRecaps = [];
+            room.inspections = {};
+            room.littleGirlClues = {};
+            room.hunterTargets = {};
             room.players = room.players.filter((p) => p.isBot || room.clients.has(p.id));
             room.dayNumber = 1;
             room.winner = 'ongoing';
@@ -1287,6 +1251,8 @@ async function startServer() {
             room.players.forEach((p, idx) => {
               p.isAlive = true;
               p.role = 'villager';
+              delete p.deathPeriod;
+              delete p.deathRound;
               p.loverId = null;
               const seat = getSeatTransform(idx, room.players.length, 8.2);
               p.x = seat.x;
