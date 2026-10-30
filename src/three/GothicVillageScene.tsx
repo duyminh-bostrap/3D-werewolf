@@ -1259,7 +1259,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         );
         _camLookAt.set(0, 3.2, -7.0);
       } else if (props.cameraPreset === 'overview') {
-        const radius = Math.max(24, 13 / Math.max(0.35, Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
+        const radius = Math.max(19, 11 / Math.max(0.25, Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
         _camTargetPos.set(Math.sin(orbitYawOffset) * radius * 0.65, radius * 0.85, Math.cos(orbitYawOffset) * radius * 0.65);
         _camLookAt.set(0, 1, 0);
       } else if (props.cameraPreset === 'first') {
