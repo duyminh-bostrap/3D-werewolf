@@ -1122,12 +1122,12 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       let targetExposure = 1.22;
 
       if (effectiveStage === 'night') {
-        _skyColorTarget.setHex(props.isWerewolfNightVision ? 0x2a060e : 0x06030b);
-        _keyColorTarget.setHex(0xe11d48);
-        _hemiSkyTarget.setHex(0x361540);
-        _hemiGroundTarget.setHex(0x0b0509);
-        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 0.88, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.52, dampFactor);
+        _skyColorTarget.setHex(props.isWerewolfNightVision ? 0x2a0818 : 0x101c37);
+        _keyColorTarget.setHex(props.isWerewolfNightVision ? 0xff5c69 : 0x9cbcff);
+        _hemiSkyTarget.setHex(0x4d66a3);
+        _hemiGroundTarget.setHex(0x111829);
+        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 1.2, dampFactor);
+        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.65, dampFactor);
         bonfireLight.color.setHex(0xff3b14);
         bonfireLight.intensity = 5.6 * flicker;
         lampGlowMat.emissiveIntensity = 3.2;
@@ -1138,15 +1138,15 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         moonHalo.position.y = moonMesh.position.y;
         moonMesh.scale.setScalar(1.38);
         moonHalo.scale.setScalar(1.38);
-        targetFogDensity = 0.024;
-        targetExposure = 0.98;
+        targetFogDensity = 0.016;
+        targetExposure = 1.05;
       } else if (effectiveStage === 'day') {
-        _skyColorTarget.setHex(0x5b8db8);
-        _keyColorTarget.setHex(0xfff7ed);
-        _hemiSkyTarget.setHex(0xdbeafe);
-        _hemiGroundTarget.setHex(0x6e665e);
-        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 3.45, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 2.05, dampFactor);
+        _skyColorTarget.setHex(0x408cbb);
+        _keyColorTarget.setHex(0xfff0d2);
+        _hemiSkyTarget.setHex(0xbedfff);
+        _hemiGroundTarget.setHex(0x293d38);
+        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 3.2, dampFactor);
+        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 1.15, dampFactor);
         bonfireLight.color.setHex(0xff9933);
         bonfireLight.intensity = 1.15 * flicker;
         lampGlowMat.emissiveIntensity = 0.06;
@@ -1157,16 +1157,16 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         moonHalo.position.y = moonMesh.position.y;
         moonMesh.scale.setScalar(0.95);
         moonHalo.scale.setScalar(0.95);
-        targetFogDensity = 0.008;
-        targetExposure = 1.38;
+        targetFogDensity = 0.006;
+        targetExposure = 1.15;
       } else {
-        // Dusk / Golden Twilight for Title & Lobby
-        _skyColorTarget.setHex(0x281c3d);
-        _keyColorTarget.setHex(0xffb36b);
-        _hemiSkyTarget.setHex(0x8b7aa8);
-        _hemiGroundTarget.setHex(0x3d2922);
+        // Manual dusk preset keeps warm highlights against cool shadows.
+        _skyColorTarget.setHex(0x44385c);
+        _keyColorTarget.setHex(0xffd29a);
+        _hemiSkyTarget.setHex(0x707cb2);
+        _hemiGroundTarget.setHex(0x3a2a35);
         keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 2.1, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 1.32, dampFactor);
+        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.95, dampFactor);
         bonfireLight.color.setHex(0xff6b1a);
         bonfireLight.intensity = 4.4 * flicker;
         lampGlowMat.emissiveIntensity = 2.1;
@@ -1178,7 +1178,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         moonMesh.scale.setScalar(1.08);
         moonHalo.scale.setScalar(1.08);
         targetFogDensity = 0.015;
-        targetExposure = 1.22;
+        targetExposure = 1.12;
       }
 
       const colorLerp = Math.min(1, dampFactor * 0.65);

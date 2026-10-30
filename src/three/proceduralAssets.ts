@@ -19,8 +19,8 @@ export function createCobblestoneTextures(maxAnisotropy: number): {
   bumpCanvas.height = size;
   const bCtx = bumpCanvas.getContext('2d')!;
 
-  // Dark mortar base
-  cCtx.fillStyle = '#14131a';
+  // Cool mortar separates the warmer lit faces of the paving stones.
+  cCtx.fillStyle = '#182a35';
   cCtx.fillRect(0, 0, size, size);
   bCtx.fillStyle = '#181818';
   bCtx.fillRect(0, 0, size, size);
@@ -40,10 +40,10 @@ export function createCobblestoneTextures(maxAnisotropy: number): {
 
       // Deterministic pseudo-random shade per stone
       const hash = Math.abs(Math.sin((r * 13 + c * 29) * 12.9898) * 43758.5453) % 1;
-      const baseLum = Math.floor(34 + hash * 22);
-      const rCol = baseLum + 2;
-      const gCol = baseLum;
-      const bCol = baseLum + 6;
+      const baseLum = Math.floor(48 + hash * 28);
+      const rCol = baseLum + 5;
+      const gCol = baseLum + 12;
+      const bCol = baseLum + 18;
 
       cCtx.fillStyle = `rgb(${rCol}, ${gCol}, ${bCol})`;
       cCtx.beginPath();
@@ -51,7 +51,7 @@ export function createCobblestoneTextures(maxAnisotropy: number): {
       cCtx.fill();
 
       // Highlight edge
-      cCtx.strokeStyle = `rgba(180, 175, 200, 0.12)`;
+      cCtx.strokeStyle = `rgba(190, 218, 229, 0.2)`;
       cCtx.lineWidth = 1;
       cCtx.stroke();
 
@@ -157,21 +157,21 @@ export function createGothicBellTower(bumpMap: THREE.Texture): THREE.Group {
   const group = new THREE.Group();
 
   const stoneMat = new THREE.MeshStandardMaterial({
-    color: 0x383444,
+    color: 0x62778b,
     roughness: 0.82,
     metalness: 0.12,
     bumpMap,
     bumpScale: 0.09,
   });
   const trimStoneMat = new THREE.MeshStandardMaterial({
-    color: 0x221f2b,
+    color: 0x25374c,
     roughness: 0.52,
     metalness: 0.28,
     bumpMap,
     bumpScale: 0.05,
   });
   const slateRoofMat = new THREE.MeshStandardMaterial({
-    color: 0x151926,
+    color: 0x23455c,
     roughness: 0.34,
     metalness: 0.38,
     bumpMap,
@@ -353,34 +353,35 @@ export function createGothicCottage(
   width = 5.4,
   depth = 6.2,
   height = 4.6,
-  roofTint = 0x1a1d2b,
+  roofTint = 0x355480,
   bumpMap?: THREE.Texture
 ): THREE.Group {
   const group = new THREE.Group();
 
   const stoneMat = new THREE.MeshStandardMaterial({
-    color: 0x2d2b38,
+    color: 0x526675,
     roughness: 0.86,
     metalness: 0.1,
     bumpMap,
     bumpScale: 0.07,
   });
   const plasterMat = new THREE.MeshStandardMaterial({
-    color: 0x524946,
+    color: 0xb69771,
     roughness: 0.8,
     metalness: 0.05,
     bumpMap,
     bumpScale: 0.03,
   });
   const timberMat = new THREE.MeshStandardMaterial({
-    color: 0x1e1410,
+    color: 0x38231e,
     roughness: 0.52,
     metalness: 0.16,
   });
   const roofMat = new THREE.MeshStandardMaterial({
     color: roofTint,
-    roughness: 0.36,
-    metalness: 0.32,
+    roughness: 0.64,
+    metalness: 0.12,
+    flatShading: true,
     bumpMap,
     bumpScale: 0.05,
   });
@@ -639,7 +640,7 @@ export function createBonfireAndGallowsPlaza(): {
   const group = new THREE.Group();
 
   const stoneMat = new THREE.MeshStandardMaterial({
-    color: 0x2c2836,
+    color: 0x4d3c49,
     roughness: 0.85,
     metalness: 0.12,
   });
@@ -1868,7 +1869,7 @@ export function buildGothicVillageEnvironment(
   const plazaRingGeo = new THREE.RingGeometry(3.4, 11.4, 48);
   plazaRingGeo.rotateX(-Math.PI / 2);
   const plazaRingMat = new THREE.MeshStandardMaterial({
-    color: 0x3b3548,
+    color: 0x735b68,
     roughness: 0.72,
     metalness: 0.15,
     bumpMap: stoneBump,
@@ -1906,12 +1907,12 @@ export function buildGothicVillageEnvironment(
 
   // 5. Ring of 6 Architectural Timbered Gothic Cottages around the outer Village Square
   const cottageSpecs = [
-    { x: -21, z: -17, rotY: Math.PI * 0.25, w: 5.6, d: 6.4, h: 4.8, tint: 0x1b2336 },
-    { x: 21, z: -17, rotY: -Math.PI * 0.25, w: 5.4, d: 6.0, h: 5.0, tint: 0x2d1b2e },
-    { x: -25, z: 4, rotY: Math.PI * 0.48, w: 6.0, d: 6.5, h: 4.5, tint: 0x182832 },
-    { x: 25, z: 4, rotY: -Math.PI * 0.48, w: 5.8, d: 6.2, h: 4.7, tint: 0x261d33 },
-    { x: -20, z: 23, rotY: Math.PI * 0.76, w: 5.2, d: 5.8, h: 4.4, tint: 0x1f2436 },
-    { x: 20, z: 23, rotY: -Math.PI * 0.76, w: 5.5, d: 6.0, h: 4.6, tint: 0x2c1c26 },
+    { x: -21, z: -17, rotY: Math.PI * 0.25, w: 5.6, d: 6.4, h: 4.8, tint: 0x934a3d },
+    { x: 21, z: -17, rotY: -Math.PI * 0.25, w: 5.4, d: 6.0, h: 5.0, tint: 0x225d67 },
+    { x: -25, z: 4, rotY: Math.PI * 0.48, w: 6.0, d: 6.5, h: 4.5, tint: 0x355480 },
+    { x: 25, z: 4, rotY: -Math.PI * 0.48, w: 5.8, d: 6.2, h: 4.7, tint: 0x5b3c78 },
+    { x: -20, z: 23, rotY: Math.PI * 0.76, w: 5.2, d: 5.8, h: 4.4, tint: 0x356552 },
+    { x: 20, z: 23, rotY: -Math.PI * 0.76, w: 5.5, d: 6.0, h: 4.6, tint: 0x81344a },
   ];
 
   for (const spec of cottageSpecs) {
@@ -1975,21 +1976,24 @@ export function buildGothicVillageEnvironment(
   const colorScratch = new THREE.Color();
 
   const trunkMat = new THREE.MeshStandardMaterial({
-    color: 0x2b1d16,
+    color: 0x4d2e22,
     roughness: 0.88,
     metalness: 0.05,
     bumpMap: stoneBump,
     bumpScale: 0.04,
   });
   const pineNeedleMat = new THREE.MeshStandardMaterial({
-    color: 0x1b3028,
+    // Instance colors supply the foliage palette; a dark base would mute it twice.
+    color: 0xffffff,
     roughness: 0.78,
     metalness: 0.06,
+    flatShading: true,
   });
   const oakFoliageMat = new THREE.MeshStandardMaterial({
-    color: 0x262235,
+    color: 0xffffff,
     roughness: 0.82,
     metalness: 0.06,
+    flatShading: true,
   });
 
   // 7A. 36 Multi-Tiered Gothic Pine / Cypress Trees (Trunk + 3 stacked conical tiers)
@@ -2030,11 +2034,11 @@ export function buildGothicVillageEnvironment(
     pineTier2.setMatrixAt(i, dummy.matrix);
     pineTier3.setMatrixAt(i, dummy.matrix);
 
-    colorScratch.setHSL(0.42 + (i % 4) * 0.03, 0.34, 0.14 + (i % 3) * 0.03);
+    colorScratch.setHSL(0.37 + (i % 4) * 0.025, 0.66, 0.24 + (i % 3) * 0.025, THREE.SRGBColorSpace);
     pineTier1.setColorAt(i, colorScratch);
-    colorScratch.setHSL(0.43 + (i % 4) * 0.03, 0.36, 0.17 + (i % 3) * 0.03);
+    colorScratch.setHSL(0.38 + (i % 4) * 0.025, 0.68, 0.29 + (i % 3) * 0.025, THREE.SRGBColorSpace);
     pineTier2.setColorAt(i, colorScratch);
-    colorScratch.setHSL(0.44 + (i % 4) * 0.03, 0.38, 0.2 + (i % 3) * 0.03);
+    colorScratch.setHSL(0.39 + (i % 4) * 0.025, 0.7, 0.34 + (i % 3) * 0.025, THREE.SRGBColorSpace);
     pineTier3.setColorAt(i, colorScratch);
   }
   for (const m of [pineTrunks, pineTier1, pineTier2, pineTier3]) {
@@ -2095,12 +2099,13 @@ export function buildGothicVillageEnvironment(
     oakCrownL.setMatrixAt(i, dummy.matrix);
     oakCrownR.setMatrixAt(i, dummy.matrix);
 
-    // Autumnal / Gothic twilight foliage hues (deep plum, midnight teal, dark crimson-umber)
-    colorScratch.setHSL(0.76 + (i % 5) * 0.04, 0.28, 0.15 + (i % 4) * 0.03);
+    // Keep each oak's crowns in one autumn hue, with brighter outer facets.
+    const oakHue = 0.07 + (i % 3) * 0.12;
+    colorScratch.setHSL(oakHue, 0.68, 0.34 + (i % 4) * 0.02, THREE.SRGBColorSpace);
     oakCrownMain.setColorAt(i, colorScratch);
-    colorScratch.setHSL(0.06 + (i % 4) * 0.03, 0.35, 0.16 + (i % 3) * 0.03);
+    colorScratch.setHSL(oakHue + 0.01, 0.65, 0.4 + (i % 3) * 0.025, THREE.SRGBColorSpace);
     oakCrownL.setColorAt(i, colorScratch);
-    colorScratch.setHSL(0.58 + (i % 4) * 0.04, 0.26, 0.15 + (i % 3) * 0.03);
+    colorScratch.setHSL(oakHue - 0.01, 0.7, 0.29 + (i % 3) * 0.025, THREE.SRGBColorSpace);
     oakCrownR.setColorAt(i, colorScratch);
   }
   for (const m of [oakTrunks, oakBranchL, oakBranchR, oakCrownMain, oakCrownL, oakCrownR]) {
@@ -2115,7 +2120,7 @@ export function buildGothicVillageEnvironment(
   const rockGeo = new THREE.DodecahedronGeometry(2.3, 1);
   rockGeo.translate(0, 1.0, 0);
   const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x2c2938,
+    color: 0x536578,
     roughness: 0.86,
     metalness: 0.12,
     bumpMap: stoneBump,
@@ -2140,7 +2145,7 @@ export function buildGothicVillageEnvironment(
   const mountainGeo = new THREE.ConeGeometry(13.5, 28, 7);
   mountainGeo.translate(0, 13.5, 0);
   const mountainMat = new THREE.MeshStandardMaterial({
-    color: 0x1b1828,
+    color: 0x304b68,
     roughness: 0.9,
     metalness: 0.08,
     bumpMap: stoneBump,
@@ -2149,7 +2154,7 @@ export function buildGothicVillageEnvironment(
   const snowPeakGeo = new THREE.ConeGeometry(5.6, 10.5, 7);
   snowPeakGeo.translate(0, 22.8, 0);
   const snowPeakMat = new THREE.MeshStandardMaterial({
-    color: 0x4a4663,
+    color: 0xb2d1dc,
     roughness: 0.65,
     metalness: 0.15,
   });
