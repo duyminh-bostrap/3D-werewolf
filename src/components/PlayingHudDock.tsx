@@ -1,5 +1,5 @@
 import { loadFriends, saveFriend } from '../lib/friendsStore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -21,7 +21,6 @@ import {
   ShieldCheck,
   Scale,
   Heart,
-  HeartHandshake,
   UserPlus,
   UserCheck,
   Check,
@@ -167,6 +166,22 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   const [friendIds, setFriendIds] = useState<Set<string>>(() => new Set());
   const [heartCounts, setHeartCounts] = useState<Record<string, number>>({});
   const [stoneCounts, setStoneCounts] = useState<Record<string, number>>({});
+  const bottomDockRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dock = bottomDockRef.current;
+    if (!dock) return;
+    const update = () => document.documentElement.style.setProperty('--game-controls-bottom', `${Math.ceil(window.innerHeight - dock.getBoundingClientRect().top + 12)}px`);
+    const observer = new ResizeObserver(update);
+    observer.observe(dock);
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      document.documentElement.style.removeProperty('--game-controls-bottom');
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -540,7 +555,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       </div>
 
       {/* Bottom HUD Area: Ultra-Compact Icon-First Phase Bar + Mic/Chat Dock */}
-      <div className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
+      <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
         {!isHudCollapsed && (
           <>
             {/* 1. Night Phase (60s): Compact Icon-Driven Bar */}
@@ -1034,18 +1049,6 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
 
           <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} title={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} className={`fixed right-3 top-[calc(42%+52px)] z-30 w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#1e172a] border-white/15 text-amber-200 hover:bg-[#2a203b]'}`}>
             <Mountain className="w-5 h-5" />
-          </button>
-
-          {/* Button 5: Friends List (mời bạn bè vào phòng) */}
-          <button
-            type="button"
-            data-testid="open-friends-btn"
-            onClick={onOpenFriends}
-            aria-label="Danh sách bạn bè"
-            title="Danh Sách Bạn Bè (F)"
-            className="w-9 h-9 rounded-xl bg-[#1e172a] hover:bg-[#2a203b] border border-[#d4af37]/40 text-emerald-300 flex items-center justify-center shadow-md cursor-pointer transition-colors shrink-0"
-          >
-            <HeartHandshake className="w-4 h-4 shrink-0" />
           </button>
 
           {/* Minimal Icon-Only Collapse Toggle for Night/Day Action Pill */}

@@ -11,4 +11,6 @@ test('chat bubbles show only the newest recent player message and expire after e
   assert.equal(activeChatBubbles(messages, 9000).size, 0);
   assert.equal(speechLines('😀'.repeat(80)).length, 3);
   assert.ok(speechLines('a'.repeat(80))[2].endsWith('…'));
+  assert.deepEqual(speechLines('Tôi là Dân lành!'), ['Tôi là Dân lành!']);
+  assert.deepEqual(speechLines('Một tin nhắn dài cần được xuống dòng theo từng từ'), ['Một tin nhắn dài cần', 'được xuống dòng theo', 'từng từ']);
 });

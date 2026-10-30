@@ -11,11 +11,22 @@ export function activeChatBubbles(messages: ChatMessage[], now: number): Map<str
 }
 
 export function speechLines(text: string): string[] {
-  const characters = Array.from(text.replace(/\s+/g, ' ').trim());
+  const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
-  for (let offset = 0; offset < Math.min(characters.length, 72); offset += 24) {
-    lines.push(characters.slice(offset, offset + 24).join(''));
+  let line = '';
+  for (const word of words) {
+    const chunks = Array.from(word);
+    if (line && Array.from(`${line} ${word}`).length > 24) {
+      lines.push(line);
+      line = '';
+    }
+    while (chunks.length > 24) {
+      lines.push(chunks.splice(0, 24).join(''));
+    }
+    const tail = chunks.join('');
+    line = line ? `${line} ${tail}` : tail;
   }
-  if (characters.length > 72) lines[2] = `${lines[2].slice(0, -1)}…`;
-  return lines;
+  if (line) lines.push(line);
+  if (lines.length > 3) lines[2] = `${Array.from(lines[2]).slice(0, 23).join('')}…`;
+  return lines.slice(0, 3);
 }

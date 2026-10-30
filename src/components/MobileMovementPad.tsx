@@ -188,6 +188,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
       {canMove && (
         <div
           className={`fixed left-2.5 sm:left-4 ${bottomOffsetClass} z-30 pointer-events-auto select-none touch-none transition-all`}
+          style={{ bottom: 'max(var(--game-controls-bottom, 104px), 104px)' }}
         >
           <div
             ref={baseRef}
@@ -292,6 +293,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
       {/* Right-Thumb Compact Translucent Camera Eye & Jump Controls (44px, low opacity) */}
       <div
         className={`fixed right-2.5 sm:right-4 ${bottomOffsetClass} z-30 pointer-events-auto select-none touch-none flex flex-col items-center gap-2 transition-all`}
+        style={{ bottom: 'max(var(--game-controls-bottom, 104px), 104px)' }}
       >
         {/* Directional Camera Eye Free-Look Button (Hold to look in direction, Release to return to default) */}
         <div
