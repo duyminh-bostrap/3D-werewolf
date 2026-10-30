@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseCharacter';
-import { startSocialLogin } from '../lib/socialAuth';
+import { isSocialProviderEnabled, startSocialLogin } from '../lib/socialAuth';
 
 export function AccountPanel({ onContinue }: { onContinue?: () => void }) {
   const [user, setUser] = useState<User | null>(null);
@@ -19,6 +19,12 @@ export function AccountPanel({ onContinue }: { onContinue?: () => void }) {
   const login = async (provider: 'google' | 'apple') => {
     setBusy(true); setError('');
     try {
+      const enabled = await isSocialProviderEnabled(provider, import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+      if (!enabled) {
+        setError(`${provider === 'google' ? 'Google' : 'Apple'} chưa được bật cho game. Bạn có thể chọn Chơi khách trong lúc chờ cấu hình.`);
+        setBusy(false);
+        return;
+      }
       const redirect = new URL(window.location.pathname, window.location.origin);
       const room = new URLSearchParams(window.location.search).get('room');
       if (room) redirect.searchParams.set('room', room);
@@ -26,8 +32,11 @@ export function AccountPanel({ onContinue }: { onContinue?: () => void }) {
       localStorage.setItem('gothic_auth_intent', intent);
       const target = window.top ?? window;
       target.location.href = url;
-    } catch {
-      setError('Chưa thể đăng nhập. Vui lòng kiểm tra kết nối hoặc thử lại sau.');
+    } catch (cause) {
+      const code = (cause as { code?: string })?.code;
+      setError(code === 'manual_linking_disabled'
+        ? 'Game chưa bật liên kết tài khoản khách. Vui lòng liên hệ quản trị viên.'
+        : 'Chưa thể đăng nhập. Vui lòng kiểm tra kết nối hoặc thử lại sau.');
       setBusy(false);
     }
   };
