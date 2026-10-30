@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { phaseNotice } from './src/game/phaseNotice';
 import { createServer as createViteServer } from 'vite';
 import {
   APPEARANCE_PRESETS,
@@ -81,6 +82,7 @@ export interface RoomPublicState {
 }
 
 interface ServerRoom extends RoomPublicState {
+  lastAnnouncedPhase?: string;
   nightActions: NightActionsInput;
   clients: Map<string, WebSocket>;
   botAutoActTimer?: ReturnType<typeof setTimeout> | null;
@@ -259,6 +261,12 @@ function canHearVoice(room: ServerRoom, listenerId: string, speakerId: string): 
 }
 
 function broadcastRoomState(room: ServerRoom) {
+  const phaseKey = `${room.phase === 'day_voting' ? 'day_discussion' : room.phase}:${room.dayNumber}:${room.accusedPlayerId ?? ''}`;
+  if (room.lastAnnouncedPhase !== phaseKey) {
+    room.lastAnnouncedPhase = phaseKey;
+    const notice = phaseNotice(room.phase, room.dayNumber, room.players.find((p) => p.id === room.accusedPlayerId)?.name, room.winReason);
+    if (notice) room.messages.push({ id: `phase_${Date.now()}_${phaseKey}`, senderId: 'system', senderName: 'Hệ thống', text: notice, channel: 'system', timestamp: Date.now() });
+  }
   updateNightProgressFields(room);
   for (const [pid, ws] of room.clients.entries()) {
     if (ws.readyState !== WebSocket.OPEN) continue;

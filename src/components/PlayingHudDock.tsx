@@ -1038,10 +1038,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             style={{ bottom: 'max(var(--game-controls-bottom, 104px), 104px)' }}
             className={`fixed right-[calc(0.625rem+52px)] sm:right-[calc(1rem+52px)] z-30 pointer-events-auto w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer transition-colors ${
               cameraPreset === 'first'
-                ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100'
-                : cameraPreset === 'follow'
-                ? 'bg-[#1e172a] hover:bg-[#2a203b] border-white/15 text-amber-200'
-                : 'bg-[#2a1f3d] border-[#d4af37]/60 text-[#d4af37]'
+                ? 'bg-[#9e1b24]/65 border-[#d4af37]/80 text-[#f3e5ab] opacity-95'
+                : 'bg-[#110d19]/32 border-[#d4af37]/30 text-[#d4af37]/85 opacity-75 hover:opacity-90'
             }`}
           >
             <Pointer className="w-5 h-5 shrink-0" />
