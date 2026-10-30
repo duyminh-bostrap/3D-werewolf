@@ -308,14 +308,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       {/* Top Perimeter Area: Top Bar + Non-Overlapping Selected 3D Character Social Bar */}
       <div className="w-full flex flex-col items-center gap-1.5">
         <div className="w-full flex items-center justify-between gap-1">
-          <div className={topGroup}>
-            <button type="button" onClick={onOpenRoleConfig} aria-label="Bộ bài Role" title="Bộ bài Role" data-testid="open-roles-modal-btn" className={topButton}>
-              <Layers className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Zone 2 (Top-Center): Phase, Countdown & Secret Role Icon */}
-          <div className={`pointer-events-auto flex items-center gap-1.5 shrink-0 ${isLobby ? '' : 'h-11 rounded-xl bg-[#110d19]/95 border border-[#d4af37]/35 px-2 shadow-lg'}`}>
+          {/* Match phase on the left; lobby action uses the available space. */}
+          <div className={`pointer-events-auto flex items-center gap-1 shrink-0 ${isLobby ? 'flex-1 justify-center' : 'h-11 rounded-xl bg-[#110d19]/95 border border-[#d4af37]/35 px-2 shadow-lg'}`}>
             {isLobby ? (
               localPlayer.isHost ? (
                 <button
@@ -416,6 +410,10 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               </button>
 
             </div>
+
+            <button type="button" onClick={onOpenRoleConfig} aria-label="Bộ bài Role" title="Bộ bài Role" data-testid="open-roles-modal-btn" className={topButton}>
+              <Layers className="w-4 h-4" />
+            </button>
 
             <button type="button" data-testid="invite-friends-btn" onClick={onOpenFriends} aria-label="Mời bạn bè" title="Mời bạn bè" className={topButton}>
               <UserPlus className="w-4 h-4" />

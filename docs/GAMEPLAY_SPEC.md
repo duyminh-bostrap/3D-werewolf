@@ -83,7 +83,7 @@ Hiện room/game ID và Supabase Auth ID là hai hệ nhận diện khác nhau; 
 ### 4.3 Điều khiển và menu
 
 - Sảnh cho phép đi lại, nhảy, chạm/đá cầu lửa; trong ván đứng theo vị trí nghi lễ.
-- Bên trái thanh trên: bộ bài role. Không có nút bài cá nhân ở sảnh. Khi vào ván, lá bài role của mình xuất hiện bên trái ngay dưới thanh trên; bấm để mở thông tin, không chồng lên cụm tương tác người chơi. Bên phải: số người, mời bạn và cài đặt. Bắt đầu/Sẵn sàng ở giữa sảnh; trong ván giữa là pha và đồng hồ.
+- Trong ván, bên trái thanh trên là ngày/đêm và đồng hồ. Bên phải gom số người, bộ bài role, mời bạn và cài đặt. Không có nút bài cá nhân ở sảnh. Khi vào ván, lá bài role của mình xuất hiện bên trái ngay dưới thanh trên; bấm để mở thông tin, không chồng lên cụm tương tác người chơi. Bắt đầu/Sẵn sàng nằm ở phần trống bên trái cụm công cụ trong sảnh.
 - Nút Mời mở danh bạ và Gửi link. Chia sẻ hệ thống nếu hỗ trợ, không thì sao chép; link localhost không dùng được trên máy khác qua Internet.
 - Không tương tác kết bạn/thả tim/ném đá chính mình. Không cấm chọn mình làm mục tiêu chức năng hợp lệ như tự bảo vệ.
 
