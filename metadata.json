@@ -1,0 +1,6 @@
+{
+  "name": "Huyết Nguyệt Thôn — Ma Sói 3D Gothic",
+  "description": "Game Ma Sói 3D nhiều người chơi trực tuyến trong không gian làng cổ Gothic với Voice Chat WebRTC thời gian thực, di chuyển tự do trong sảnh chờ, tùy chỉnh nhân vật và hiệu ứng lá bài Tarot kinh dị.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

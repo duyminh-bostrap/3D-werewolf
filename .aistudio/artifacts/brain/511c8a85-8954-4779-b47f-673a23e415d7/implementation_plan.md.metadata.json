@@ -1,0 +1,6 @@
+{
+  "summary":  "Kế hoạch thiết kế và nâng cấp Huyết Nguyệt Thôn (Ma Sói 3D) ưu tiên Web App Mobile: rút gọn văn bản tiêu đề, luồng 2 bước Tạo nhân vật 3D -> Tạo/Nhập phòng vào Sảnh chờ, cơ chế đếm ngược chuẩn (Đêm 60s tự động qua đêm khi đủ hành động, Ngày thảo luận 180s có bỏ phiếu trắng, Biện minh trên giàn 30s kèm bỏ phiếu Cứu/Giết), và tinh chỉnh bộ 3 nút điều khiển di chuyển/mắt camera nhỏ gọn, bán trong suốt, xoay theo hướng giữ và trả về góc nhìn mặc định khi thả tay.",
+  "updatedAt":  "2026-10-30T13:52:54.491443609Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
