@@ -1035,7 +1035,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             aria-label={cameraPreset === 'first' ? 'Tắt chỉ tay · Góc nhìn thứ ba' : 'Bật chỉ tay · Góc nhìn thứ nhất'}
             aria-pressed={cameraPreset === 'first'}
             title={cameraPreset === 'first' ? 'Tắt chỉ tay · Góc nhìn thứ ba' : 'Bật chỉ tay · Góc nhìn thứ nhất'}
-            className={`fixed right-3 top-[42%] z-30 pointer-events-auto w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer transition-colors ${
+            style={{ bottom: 'max(var(--game-controls-bottom, 104px), 104px)' }}
+            className={`fixed right-[calc(0.625rem+52px)] sm:right-[calc(1rem+52px)] z-30 pointer-events-auto w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer transition-colors ${
               cameraPreset === 'first'
                 ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100'
                 : cameraPreset === 'follow'
@@ -1047,7 +1048,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           </button>
           )}
 
-          <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} title={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} className={`fixed right-3 top-[calc(42%+52px)] z-30 w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#1e172a] border-white/15 text-amber-200 hover:bg-[#2a203b]'}`}>
+          <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} title={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} className={`fixed right-3 top-16 z-30 w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#1e172a] border-white/15 text-amber-200 hover:bg-[#2a203b]'}`}>
             <Mountain className="w-5 h-5" />
           </button>
 
