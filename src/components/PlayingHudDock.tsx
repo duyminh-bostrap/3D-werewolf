@@ -309,7 +309,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       <div className="w-full flex flex-col items-center gap-1.5">
         <div className="w-full flex items-center justify-between gap-1">
           {/* Match phase on the left; lobby action uses the available space. */}
-          <div className={`pointer-events-auto flex items-center gap-1 shrink-0 ${isLobby ? 'flex-1 justify-center' : 'h-11 rounded-xl bg-[#110d19]/95 border border-[#d4af37]/35 px-2 shadow-lg'}`}>
+          <div className={`pointer-events-auto flex items-center gap-1 shrink-0 ${isLobby ? 'flex-1 justify-start' : 'h-11 rounded-xl bg-[#110d19]/95 border border-[#d4af37]/35 px-2 shadow-lg'}`}>
             {isLobby ? (
               localPlayer.isHost ? (
                 <button

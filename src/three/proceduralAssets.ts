@@ -1634,7 +1634,7 @@ export function createPlayerLabelSprite(
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(isSelected ? 2.02 : 1.85, isSelected ? 0.58 : 0.52, 1);
-  sprite.position.set(0, 2.72, 0);
+  sprite.position.set(0, 3.4, 0);
   sprite.renderOrder = 10;
   return sprite;
 }
@@ -1703,7 +1703,7 @@ function createCompactPlayerLabelSprite(
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(isSelected ? 2.9 : 2.7, isSelected ? 0.66 : 0.61, 1);
-  sprite.position.set(0, 2.58, 0);
+  sprite.position.set(0, 3.4, 0);
   sprite.renderOrder = 10;
   return sprite;
 }

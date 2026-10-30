@@ -50,7 +50,8 @@
 }
 .quick-chat-strip::-webkit-scrollbar { display: none; }
 
-.game-results-scroll {
+.game-results-scroll,
+.modal-scroll {
   scrollbar-width: thin;
   scrollbar-color: #4a3c54 transparent;
 }
