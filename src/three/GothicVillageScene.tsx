@@ -1,3 +1,9 @@
+import { canSeeWolfOutline } from '../game/wolfOutline';
+import { introTourAngle, INTRO_TOUR_SECONDS } from '../game/introTour';
+import { newlyDeadPlayers } from '../game/deathNotifications';
+import { advanceTrialVisual, type TrialVisual } from '../game/trialVisual';
+import { followCameraPose } from '../game/followCamera';
+import { CameraDrag } from '../game/cameraDrag';
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -23,14 +29,19 @@ import type { MobileMovementInput } from '../components/MobileMovementPad';
 
 export type LightingStageMode = 'auto' | 'dusk' | 'night' | 'day';
 
+export type CameraPreset = 'follow' | 'first' | 'overview' | 'bonfire';
+
 export interface GothicVillageSceneProps {
   isTitleScreen: boolean;
+  isIntroPlaying: boolean;
+  onIntroComplete: () => void;
   phase: GamePhase;
   players: PlayerState[];
   localPlayerId: string;
   selectedTargetId: string | null;
   dayVotes: Record<string, string>;
-  cameraPreset: 'follow' | 'overview' | 'bonfire';
+  accusedPlayerId: string | null;
+  cameraPreset: CameraPreset;
   lightingOverride?: LightingStageMode;
   isWerewolfNightVision: boolean;
   mobileInputRef?: React.MutableRefObject<MobileMovementInput>;
@@ -52,11 +63,14 @@ const _keyColorTarget = new THREE.Color();
 
 export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
   isTitleScreen,
+  isIntroPlaying,
+  onIntroComplete,
   phase,
   players,
   localPlayerId,
   selectedTargetId,
   dayVotes,
+  accusedPlayerId,
   cameraPreset,
   lightingOverride = 'auto',
   isWerewolfNightVision,
@@ -70,11 +84,14 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
   // Store latest props in ref so React HUD updates never tear down WebGL canvas
   const latestPropsRef = useRef({
     isTitleScreen,
+    isIntroPlaying,
+    onIntroComplete,
     phase,
     players,
     localPlayerId,
     selectedTargetId,
     dayVotes,
+    accusedPlayerId,
     cameraPreset,
     lightingOverride,
     isWerewolfNightVision,
@@ -87,11 +104,14 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
   useEffect(() => {
     latestPropsRef.current = {
       isTitleScreen,
+      isIntroPlaying,
+      onIntroComplete,
       phase,
       players,
       localPlayerId,
       selectedTargetId,
       dayVotes,
+      accusedPlayerId,
       cameraPreset,
       lightingOverride,
       isWerewolfNightVision,
@@ -102,11 +122,14 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     };
   }, [
     isTitleScreen,
+    isIntroPlaying,
+    onIntroComplete,
     phase,
     players,
     localPlayerId,
     selectedTargetId,
     dayVotes,
+    accusedPlayerId,
     cameraPreset,
     lightingOverride,
     isWerewolfNightVision,
@@ -170,6 +193,31 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     );
     camera.position.set(0, 7.2, 21.5);
     camera.lookAt(0, 2.0, -3.5);
+    scene.add(camera);
+    const pointingHand = new THREE.Group();
+    const gloveMaterial = new THREE.MeshBasicMaterial({ color: 0x8d6650, depthTest: false, depthWrite: false });
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), gloveMaterial);
+    palm.scale.set(0.8, 0.6, 1.15);
+    pointingHand.add(palm);
+    const indexFinger = new THREE.Mesh(new THREE.CapsuleGeometry(0.023, 0.19, 4, 8), gloveMaterial);
+    indexFinger.rotation.x = Math.PI / 2;
+    indexFinger.position.set(-0.045, 0.025, -0.16);
+    pointingHand.add(indexFinger);
+    for (let i = 0; i < 3; i++) {
+      const finger = new THREE.Mesh(new THREE.SphereGeometry(0.029, 8, 6), gloveMaterial);
+      finger.position.set(-0.005 + i * 0.032, -0.015, -0.075);
+      pointingHand.add(finger);
+    }
+    const sleeveMaterial = new THREE.MeshBasicMaterial({ color: 0x281822, depthTest: false, depthWrite: false });
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.10, 0.5, 10), sleeveMaterial);
+    sleeve.rotation.x = Math.PI / 2;
+    sleeve.position.z = 0.28;
+    pointingHand.add(sleeve);
+    pointingHand.traverse((object) => { object.renderOrder = 100; });
+    pointingHand.visible = false;
+    camera.add(pointingHand);
+    let pointBlend = 0;
+
 
     // 2. Mandatory Studio Environment Reflection (RoomEnvironment + PMREMGenerator)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -232,6 +280,12 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       lampGlowMat,
     } = buildGothicVillageEnvironment(scene, maxAnisotropy);
 
+    const gallows = scene.getObjectByName('gallows');
+    let trialVisual: TrialVisual | null = null;
+    let previousLife: Map<string, boolean> | null = null;
+    const deathQueue: string[] = [];
+    let deathFocus: { playerId: string; startedAt: number } | null = null;
+
     // Interactive 3D Kickable Fireball ("Quả Cầu Lửa") in the Village Square
     const fireballRig = createKickableFireball(scene);
     let fireballState: FireballState = {
@@ -267,6 +321,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     }
 
     const avatarMap = new Map<string, AvatarEntry>();
+    const wolfOutlineMaterial = new THREE.MeshBasicMaterial({ color: 0xff3d55, side: THREE.BackSide, transparent: true, opacity: 0.75, depthWrite: false });
     const interactableHitboxes: THREE.Object3D[] = [fireballRig.hitbox];
     const playersRoot = new THREE.Group();
     scene.add(playersRoot);
@@ -349,9 +404,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     let lastMoveEmitTime = 0;
     let orbitYawOffset = 0;
     let orbitPitchOffset = 0;
-    let isDraggingCamera = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
+    const cameraDrag = new CameraDrag();
 
     const onKeyDown = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName;
@@ -367,7 +420,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
     const clearHeldInputs = () => {
       keysPressed.clear();
-      isDraggingCamera = false;
+      cameraDrag.clear();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -380,27 +433,20 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
     const onPointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      isDraggingCamera = true;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
+      cameraDrag.start(e.pointerId, e.clientX, e.clientY);
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDraggingCamera) return;
-      const dx = e.clientX - dragStartX;
-      const dy = e.clientY - dragStartY;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-        orbitYawOffset -= dx * 0.0065;
-        orbitPitchOffset = THREE.MathUtils.clamp(orbitPitchOffset + dy * 0.012, -2.0, 3.6);
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-      }
+      const delta = cameraDrag.move(e.pointerId, e.clientX, e.clientY);
+      if (!delta) return;
+      orbitYawOffset -= delta.dx * 0.0065;
+      orbitPitchOffset = THREE.MathUtils.clamp(orbitPitchOffset + delta.dy * 0.012, -2.0, 3.6);
     };
 
     const onPointerUp = (e: PointerEvent) => {
-      const movedMuch = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY) > 8;
-      isDraggingCamera = false;
-      if (movedMuch || latestPropsRef.current.isTitleScreen) return;
+      const tap = cameraDrag.end(e.pointerId, e.clientX, e.clientY);
+      if (tap === null) return;
+      if (!tap || latestPropsRef.current.isTitleScreen) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -441,9 +487,14 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     };
 
     const canvasEl = renderer.domElement;
+    canvasEl.style.touchAction = 'none';
     canvasEl.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    const onPointerCancel = (e: PointerEvent) => {
+      cameraDrag.end(e.pointerId, e.clientX, e.clientY);
+    };
+    window.addEventListener('pointercancel', onPointerCancel);
 
     const onResize = () => {
       if (!container) return;
@@ -487,6 +538,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     }
 
     const clock = new THREE.Clock();
+    let introStart: number | null = null;
+    let introFinished = false;
 
     function syncPlayerAvatars(
       currentPlayers: PlayerState[],
@@ -517,6 +570,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         }
       }
 
+      const compactLabels = true;
+
       currentPlayers.forEach((p, idx) => {
         const isWolfBeast =
           p.isAlive &&
@@ -527,7 +582,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         const sig = `${JSON.stringify(p.appearance)}_${isWolfBeast}_${p.isAlive}`;
         const vCount = voteCounts[p.id] || 0;
         const isSelected = selectedId === p.id;
-        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}`;
+        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}_${compactLabels ? 'c' : 'f'}_${p.isHost}`;
 
         let entry = avatarMap.get(p.id);
         if (!entry || entry.signature !== sig) {
@@ -538,6 +593,17 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           }
 
           const newGroup = createCharacterAvatar(p.appearance, isWolfBeast, p.isAlive);
+          const bodyMeshes: THREE.Mesh[] = [];
+          newGroup.traverse((object) => {
+            if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial && !object.parent?.name.includes('target')) bodyMeshes.push(object);
+          });
+          for (const mesh of bodyMeshes) {
+            const outline = new THREE.Mesh(mesh.geometry, wolfOutlineMaterial);
+            outline.name = 'wolf_team_outline';
+            outline.scale.setScalar(1.065);
+            outline.visible = false;
+            mesh.add(outline);
+          }
           const labelSprite = createPlayerLabelSprite(
             p.name,
             p.appearance.epithet,
@@ -546,7 +612,9 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             p.isSpeaking,
             vCount,
             p.id === localId,
-            isSelected
+            isSelected,
+            compactLabels,
+            p.isHost
           );
           newGroup.add(labelSprite);
 
@@ -590,7 +658,9 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             p.isSpeaking,
             vCount,
             p.id === localId,
-            isSelected
+            isSelected,
+            compactLabels,
+            p.isHost
           );
           entry.group.add(updatedSprite);
           entry.labelSprite = updatedSprite;
@@ -600,8 +670,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         // Update target coordinates: local player moves freely in lobby, and stands in ritual circle when playing
         if (p.id === localId) {
           if (!localPosInitialized) {
-            localX = p.x || 0;
-            localZ = p.z || 11.2;
+            localX = p.x ?? 0;
+            localZ = p.z ?? 11.2;
             localRotY = p.rotY || Math.PI;
             localPosInitialized = true;
           }
@@ -628,28 +698,12 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           entry.targetRotY = currentPhase === 'lobby' ? p.rotY : seat.rotY;
         }
 
-        // Highlight aura ring & 3D overhead target reticle when selected in 3D
+        const showWolfOutline = canSeeWolfOutline(currentPhase, currentPlayers.find((player) => player.id === localId), p);
+        entry.group.traverse((object) => {
+          if (object.name === 'wolf_team_outline') object.visible = showWolfOutline;
+        });
         const aura = entry.group.getObjectByName('avatar_aura_ring') as THREE.Mesh | undefined;
-        if (aura) {
-          const mat = aura.material as THREE.MeshBasicMaterial;
-          if (isSelected) {
-            mat.color.setHex(0xef4444);
-            mat.opacity = 0.95;
-            aura.scale.setScalar(1.38 + Math.sin(elapsed * 7) * 0.1);
-          } else if (p.isSpeaking) {
-            mat.color.setHex(0x10b981);
-            mat.opacity = 0.85;
-            aura.scale.setScalar(1.15 + Math.sin(elapsed * 10) * 0.08);
-          } else if (p.id === localId) {
-            mat.color.setHex(0xf59e0b);
-            mat.opacity = 0.65;
-            aura.scale.setScalar(1.0);
-          } else {
-            mat.color.set(p.appearance.trimColor || '#d4af37');
-            mat.opacity = 0.34;
-            aura.scale.setScalar(1.0);
-          }
-        }
+        if (aura) aura.visible = p.id === localId;
 
         const targetMarker = entry.group.getObjectByName('avatar_target_marker');
         if (targetMarker) {
@@ -668,21 +722,26 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       const elapsed = clock.getElapsedTime();
       const props = latestPropsRef.current;
 
-      // 1. Update local player WASD / Arrow / Mobile Virtual Joystick movement, Jump & Directional Eye Look
+      // 1. Update local player WASD / Arrow / Mobile Virtual Joystick movement, Jump & Camera Look
       const mobInput = props.mobileInputRef?.current;
-      const eyeDamp = 1 - Math.exp(-10.5 * dt);
-      if (mobInput?.isHoldingEye) {
-        orbitYawOffset = THREE.MathUtils.lerp(orbitYawOffset, mobInput.eyeLookYaw, eyeDamp);
-        orbitPitchOffset = THREE.MathUtils.lerp(
-          orbitPitchOffset,
-          THREE.MathUtils.clamp(mobInput.eyeLookPitch, -2.0, 3.6),
-          eyeDamp
-        );
-      } else if (!isDraggingCamera) {
-        // Return smoothly to default camera angle (0, 0) when releasing the Eye button
-        orbitYawOffset = THREE.MathUtils.lerp(orbitYawOffset, 0, eyeDamp);
-        orbitPitchOffset = THREE.MathUtils.lerp(orbitPitchOffset, 0, eyeDamp);
+      if (mobInput) {
+        // Swipe deltas are accumulated by the Eye pad and consumed here, so the camera
+        // keeps the new angle after release instead of snapping back to a locked view.
+        if (mobInput.lookDeltaYaw !== 0) {
+          orbitYawOffset -= mobInput.lookDeltaYaw;
+          mobInput.lookDeltaYaw = 0;
+        }
+        if (mobInput.lookDeltaPitch !== 0) {
+          orbitPitchOffset = THREE.MathUtils.clamp(
+            orbitPitchOffset + mobInput.lookDeltaPitch,
+            -2.0,
+            3.6
+          );
+          mobInput.lookDeltaPitch = 0;
+        }
       }
+
+      let isMovingNow = false;
 
       if (!props.isTitleScreen && canPlayerMoveInPhase(props.phase)) {
         // Handle Jump Request (Spacebar or Mobile Jump Button)
@@ -766,6 +825,19 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         localVelY = 0;
       }
 
+      if (!props.isTitleScreen && previousLife) {
+        const deaths = newlyDeadPlayers(previousLife, props.players);
+        deaths.sort((a, b) => Number(b.id === trialVisual?.playerId) - Number(a.id === trialVisual?.playerId));
+        deathQueue.push(...deaths.map((p) => p.id));
+      }
+      previousLife = props.isTitleScreen ? null : new Map(props.players.map((p) => [p.id, p.isAlive]));
+      if (deathFocus && elapsed - deathFocus.startedAt >= 3.5) deathFocus = null;
+      if (!deathFocus && deathQueue.length) deathFocus = { playerId: deathQueue.shift()!, startedAt: elapsed };
+
+      const previousAccused = trialVisual && props.players.find((p) => p.id === trialVisual!.playerId);
+      trialVisual = advanceTrialVisual(trialVisual, props.phase, props.accusedPlayerId, previousAccused?.isAlive ?? true, elapsed);
+      if (gallows) gallows.visible = !props.isTitleScreen && trialVisual !== null;
+
       // 2. Sync & interpolate 3D player avatars
       syncPlayerAvatars(
         props.players,
@@ -777,6 +849,18 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         elapsed
       );
 
+      if (trialVisual) {
+        const accused = avatarMap.get(trialVisual.playerId);
+        if (accused) {
+          accused.targetX = 5.59;
+          accused.targetZ = -4.81;
+          if (trialVisual.playerId === props.localPlayerId) {
+            localX = accused.targetX;
+            localZ = accused.targetZ;
+          }
+        }
+      }
+
       const dampFactor = 1 - Math.exp(-10 * dt);
       for (const [id, entry] of avatarMap.entries()) {
         const prevX = entry.group.position.x;
@@ -786,7 +870,10 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
         const isLocalAvatar = id === props.localPlayerId;
         const avatarJumpY = isLocalAvatar ? localY : 0;
-        entry.group.position.y = avatarJumpY;
+        const executionAge = trialVisual?.playerId === id && trialVisual.executedAt !== null
+          ? elapsed - trialVisual.executedAt : null;
+        entry.group.position.y = executionAge === null ? avatarJumpY : 0.55 + Math.sin(executionAge * 6) * 0.08;
+        entry.group.rotation.z = executionAge === null ? 0 : Math.sin(executionAge * 4) * 0.16;
 
         // Keep ground aura ring anchored to the cobblestones even when jumping
         const aura = entry.group.getObjectByName('avatar_aura_ring') as THREE.Mesh | undefined;
@@ -991,7 +1078,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             props.phase === 'day_trial' ||
             props.phase === 'hunter_revenge'
           ? 'day'
-          : 'dusk';
+          : 'day';
 
       // Animate Central Bonfire, Cathedral Bell & Rising Ember Particles
       const flicker = 1 + Math.sin(elapsed * 9.5) * 0.12 + Math.cos(elapsed * 15.2) * 0.08;
@@ -1113,71 +1200,77 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
       // 5. Panoramic Full-Circle Tactical Camera Choreography (frames all 5-15 players clearly for easy selection)
       let activeOccludedIndices: number[] = [];
+      let camLambda = 1 - Math.exp(-8.5 * dt);
+
+      // In first-person the local avatar must not block the head camera
+      const localAvatarEntry = avatarMap.get(props.localPlayerId);
+      if (localAvatarEntry) {
+        localAvatarEntry.group.visible = props.cameraPreset !== 'first' || deathFocus?.playerId === props.localPlayerId;
+      }
+
       if (props.isTitleScreen) {
-        const tourAngle = elapsed * 0.14;
+        if (props.isIntroPlaying && introStart === null) introStart = elapsed;
+        const introElapsed = introStart === null ? 0 : elapsed - introStart;
+        const tourAngle = props.isIntroPlaying
+          ? introTourAngle(introElapsed)
+          : introFinished && introStart !== null
+          ? 2 * Math.PI + Math.max(0, introElapsed - INTRO_TOUR_SECONDS) * 0.14
+          : elapsed * 0.14;
+        if (props.isIntroPlaying) {
+          camLambda = 1;
+          if (!introFinished && introElapsed >= INTRO_TOUR_SECONDS) {
+            introFinished = true;
+            props.onIntroComplete();
+          }
+        }
         _camTargetPos.set(
           Math.sin(tourAngle) * 19.5,
           7.4 + Math.sin(elapsed * 0.35) * 1.4,
           Math.cos(tourAngle) * 19.5 + 3.0
         );
         _camLookAt.set(0, 3.2, -7.0);
+      } else if (props.cameraPreset === 'overview') {
+        const radius = Math.max(24, 13 / Math.max(0.35, Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
+        _camTargetPos.set(Math.sin(orbitYawOffset) * radius * 0.65, radius * 0.85, Math.cos(orbitYawOffset) * radius * 0.65);
+        _camLookAt.set(0, 1, 0);
+      } else if (props.cameraPreset === 'first') {
+        // First-person head camera: sits at the local player's eyes and looks along the
+        // orbit yaw/pitch that the mouse drag or the mobile "Eye" pad controls.
+        const eyeHeight = 1.66 + localY;
+        const pitch = THREE.MathUtils.clamp(orbitPitchOffset * 0.34, -0.95, 1.05);
+        const cosPitch = Math.cos(pitch);
+        const forwardX = -Math.sin(orbitYawOffset) * cosPitch;
+        const forwardZ = -Math.cos(orbitYawOffset) * cosPitch;
+        const forwardY = -Math.sin(pitch);
+
+        _camTargetPos.set(localX, eyeHeight, localZ);
+        _camLookAt.set(
+          localX + forwardX * 8,
+          eyeHeight + forwardY * 8,
+          localZ + forwardZ * 8
+        );
+        // Snappier follow so the head camera never feels detached from the body
+        camLambda = 1 - Math.exp(-26 * dt);
       } else {
         const localEntry = avatarMap.get(props.localPlayerId);
         const px = localEntry ? localEntry.group.position.x : localX;
         const pz = localEntry ? localEntry.group.position.z : localZ;
-        const isMovableLobby = canPlayerMoveInPhase(props.phase) && props.cameraPreset === 'follow';
-
-        // Compute minimum 3D distance so the entire player circle (radius 8.2..9.3m + labels)
-        // fits comfortably inside both mobile portrait (aspect < 1) and desktop viewports
-        const playerCount = Math.max(5, props.players.length);
-        const circleRadius = playerCount > 10 ? 8.2 + (playerCount - 10) * 0.22 : 8.2;
-        const vFovRad = THREE.MathUtils.degToRad(camera.fov);
-        const tanHalfVFov = Math.tan(vFovRad * 0.5);
-        const tanHalfHFov = Math.max(0.34, tanHalfVFov * camera.aspect);
-
-        const requiredSpanHalfWidth = circleRadius + 2.6;
-        const minCenterDist = Math.max(19.2, requiredSpanHalfWidth / tanHalfHFov);
-
-        const groundDist = minCenterDist * 0.84;
-        const baseHeight = Math.max(11.2, minCenterDist * 0.55);
-        const camHeight = THREE.MathUtils.clamp(baseHeight + orbitPitchOffset * 1.2, 5.5, 22.0);
-
-        // In active game phases (Night, Day Discussion, Voting, Trial), anchor 100% on the bonfire circle
-        // so every single player is symmetrically framed and effortless to tap/select.
-        // In Lobby, blend 22% of local player offset so walking still feels responsive while keeping everyone in view.
-        const anchorX = isMovableLobby ? px * 0.22 : 0;
-        const anchorZ = isMovableLobby ? (pz - 8.2) * 0.22 : 0;
-
-        const desiredCamX = anchorX + Math.sin(orbitYawOffset) * groundDist;
-        const desiredCamZ = anchorZ + Math.cos(orbitYawOffset) * groundDist;
-
-        if (camHeight < 9.5) {
-          const camCol = resolveCameraCollision(
-            anchorX,
-            anchorZ,
-            desiredCamX,
-            desiredCamZ,
-            obstacles,
-            1.8,
-            3.6
-          );
-          activeOccludedIndices = camCol.occludedObstacleIndices;
-          _camTargetPos.set(camCol.x, camHeight + localY * 0.25, camCol.z);
-        } else {
-          _camTargetPos.set(desiredCamX, camHeight + localY * 0.25, desiredCamZ);
-        }
-
-        // Look directly at the center of the player circle (slightly forward in Z so the ring sits between top and bottom HUD bars)
-        const forwardLookX = -Math.sin(orbitYawOffset) * 1.2;
-        const forwardLookZ = 0.65 - Math.cos(orbitYawOffset) * 0.45;
-        _camLookAt.set(
-          anchorX + forwardLookX,
-          1.25 + localY * 0.2 - orbitPitchOffset * 0.25,
-          anchorZ + forwardLookZ
-        );
+        const pose = followCameraPose(px, pz, orbitYawOffset, orbitPitchOffset);
+        const camCol = resolveCameraCollision(px, pz, pose.x, pose.z, obstacles, 0.8, 1.4);
+        activeOccludedIndices = camCol.occludedObstacleIndices;
+        _camTargetPos.set(camCol.x, pose.y + localY, camCol.z);
+        _camLookAt.set(pose.lookX, pose.lookY + localY, pose.lookZ);
       }
 
-      const camLambda = 1 - Math.exp(-8.5 * dt);
+      if (deathFocus) {
+        const target = avatarMap.get(deathFocus.playerId)?.group;
+        if (target) {
+          _camTargetPos.set(target.position.x + 4, target.position.y + 3.4, target.position.z + 5);
+          _camLookAt.set(target.position.x, target.position.y + 1.4, target.position.z);
+          camLambda = 1 - Math.exp(-5 * dt);
+        }
+      }
+
       camera.position.lerp(_camTargetPos, camLambda);
       _currentLookAt.lerp(_camLookAt, camLambda);
       camera.lookAt(_currentLookAt);
@@ -1189,6 +1282,16 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           obs &&
           Math.hypot(camera.position.x - obs.x, camera.position.z - obs.z) < obs.radius + 2.4;
         bGroup.visible = !(activeOccludedIndices.includes(obsIdx) || nearLiveCam);
+      }
+
+      const isPointing = props.cameraPreset === 'first' && !props.isTitleScreen && !deathFocus;
+      pointBlend = THREE.MathUtils.lerp(pointBlend, isPointing ? 1 : 0, 1 - Math.exp(-12 * dt));
+      pointingHand.visible = isPointing && pointBlend > 0.01;
+      if (pointingHand.visible) {
+        pointingHand.position.set(0.24, -0.55 + Math.max(0, pointBlend) * 0.28, -0.65);
+        pointingHand.rotation.x = -0.12;
+        const local = props.players.find((p) => p.id === props.localPlayerId);
+        sleeveMaterial.color.set(local?.appearance.cloakColor ?? '#281822');
       }
 
       renderer.render(scene, camera);
@@ -1206,6 +1309,10 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       isDisposed = true;
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
+      pointingHand.traverse((object) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
+      wolfOutlineMaterial.dispose();
+      gloveMaterial.dispose();
+      sleeveMaterial.dispose();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearHeldInputs);
@@ -1214,6 +1321,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       canvasEl.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
     };

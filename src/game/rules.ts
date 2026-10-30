@@ -567,16 +567,16 @@ export interface LobbyStartValidation {
 
 /**
  * Validates whether the Host can start the match in Lobby:
- * 1. The room must have reached its configured maxPlayers capacity (>= MIN_ROOM_PLAYERS).
+ * 1. The room must contain between MIN_ROOM_PLAYERS and MAX_ROOM_PLAYERS players.
  * 2. All non-host players in the room must have pressed Ready (`isReady === true`).
  */
 export function validateLobbyStart(
   players: PlayerState[],
   maxPlayers: number
 ): LobbyStartValidation {
-  const requiredCount = clampRoomPlayerCount(maxPlayers);
+  const requiredCount = MIN_ROOM_PLAYERS;
   const currentCount = players.length;
-  const hasEnoughPlayers = currentCount >= requiredCount && currentCount >= MIN_ROOM_PLAYERS;
+  const hasEnoughPlayers = currentCount >= MIN_ROOM_PLAYERS && currentCount <= Math.min(MAX_ROOM_PLAYERS, clampRoomPlayerCount(maxPlayers));
   const readyCount = players.filter((p) => p.isHost || p.isReady).length;
   const allPlayersReady = currentCount > 0 && readyCount === currentCount;
   const canStart = hasEnoughPlayers && allPlayersReady;
@@ -841,7 +841,7 @@ export function computeNightActionProgress(
     requiredCount += 1;
 
     let done = actedSet.has(p.id);
-    if (!done) {
+    if (!done && input.actedPlayerIds === undefined) {
       if (isWolfPackRole(p.role)) {
         done = Boolean(input.wolfVotes[p.id] || (p.role === 'white_wolf' && input.whiteWolfTargetId));
       } else if (p.role === 'seer') {

@@ -14,6 +14,18 @@ import {
   Trophy,
   Moon,
   Check,
+  Crown,
+  Snowflake,
+  Eye,
+  Shield,
+  FlaskConical,
+  Crosshair,
+  Heart,
+  Footprints,
+  Landmark,
+  Laugh,
+  PawPrint,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   MAX_ROOM_PLAYERS,
@@ -26,6 +38,24 @@ import {
   type RoleId,
 } from '../game/rules';
 import { renderRoleWoodcutSvg } from './RoleTarotModal';
+
+const ROLE_ICONS: Record<RoleId, LucideIcon> = {
+  villager: Users,
+  werewolf: PawPrint,
+  alpha_wolf: Crown,
+  white_wolf: Snowflake,
+  cursed_wolf: Flame,
+  seer: Eye,
+  aura_seer: Sparkles,
+  bodyguard: Shield,
+  witch: FlaskConical,
+  hunter: Crosshair,
+  cupid: Heart,
+  elder: BookOpen,
+  little_girl: Footprints,
+  mayor: Landmark,
+  jester: Laugh,
+};
 
 interface RoleConfigModalProps {
   isOpen: boolean;
@@ -342,9 +372,10 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
         </div>
 
         {/* Compact Role Cards Grid (No bloated paragraphs; click ℹ for full explanation) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2">
           {visibleRoles.map(({ key, roleId, max, recommendedMinPlayers }) => {
             const meta = ROLE_CATALOG[roleId];
+            const RoleIcon = ROLE_ICONS[roleId] ?? Users;
             const count = clampedDeck[key] ?? 0;
             const isWolfPackKey =
               key === 'werewolf' || key === 'alpha_wolf' || key === 'white_wolf';
@@ -359,163 +390,132 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
               <div
                 key={key}
                 data-testid={`role-card-${roleId}`}
-                className={`rounded-xl border p-2.5 sm:p-3 flex flex-col justify-between transition-colors ${
+                className={`group flex items-center gap-1.5 rounded-xl border px-2 py-1.5 transition-all ${
                   count > 0
-                    ? 'bg-[#1a1426] border-[#d4af37]/45 shadow-sm'
-                    : 'bg-[#14101d] border-white/10 opacity-85'
+                    ? 'shadow-[0_0_16px_-8px_rgba(212,175,55,0.9)]'
+                    : 'hover:border-white/25'
                 }`}
+                style={{
+                  background: count > 0
+                    ? `linear-gradient(135deg, ${meta.accentColor}1f, rgba(18,14,27,0.92))`
+                    : 'rgba(20,16,29,0.9)',
+                  borderColor: count > 0 ? `${meta.accentColor}70` : 'rgba(255,255,255,0.1)',
+                }}
               >
-                <div>
-                  {/* Top: Name + Info Icon Button + Player Count Recommendation Badge */}
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: meta.accentColor }}
-                      />
-                      <span
-                        className="text-xs font-bold truncate"
-                        style={{ color: meta.accentColor }}
-                      >
-                        {meta.nameVi}
-                      </span>
-                    </div>
+                {/* Vivid role icon badge */}
+                <span
+                  className="w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                  style={{
+                    backgroundColor: `${meta.accentColor}24`,
+                    borderColor: `${meta.accentColor}59`,
+                    color: meta.accentColor,
+                    boxShadow: count > 0 ? `0 0 12px -4px ${meta.accentColor}` : 'none',
+                  }}
+                >
+                  <RoleIcon className="w-4 h-4" />
+                </span>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        data-testid={`role-info-btn-${roleId}`}
-                        onClick={() => setInspectingRoleId(roleId)}
-                        aria-label={`Giải thích vai trò ${meta.nameVi}`}
-                        title={`Ấn để xem giải thích chi tiết vai trò ${meta.nameVi}`}
-                        className="p-1 rounded-md bg-white/5 hover:bg-[#d4af37]/25 border border-white/10 hover:border-[#d4af37]/60 text-[#d4af37] flex items-center justify-center cursor-pointer transition-colors"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-white/5 text-slate-400">
-                        ≥{recommendedMinPlayers}ng
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Subtitle: Faction Badge + Quick Text Link to open role info */}
-                  <div className="flex items-center justify-between mt-1.5 text-[11px]">
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                      style={{
-                        backgroundColor: `${meta.accentColor}18`,
-                        color: meta.accentColor,
-                        border: `1px solid ${meta.accentColor}35`,
-                      }}
-                    >
-                      {meta.faction === 'werewolves'
+                {/* Role name + minimum players */}
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="text-[11px] sm:text-xs font-bold truncate leading-tight"
+                    style={{ color: count > 0 ? meta.accentColor : '#cbd5e1' }}
+                    title={`${meta.nameVi} — ${
+                      meta.faction === 'werewolves'
                         ? 'Phe Ma Sói'
                         : meta.faction === 'solo'
                         ? 'Phe Độc Lập'
-                        : 'Phe Dân Làng'}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => setInspectingRoleId(roleId)}
-                      className="text-[10px] text-[#d4af37] hover:underline flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <span>Giải thích</span>
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
+                        : 'Phe Dân Làng'
+                    } · cần ≥${recommendedMinPlayers} người`}
+                  >
+                    {meta.nameVi}
+                  </div>
+                  <div className="text-[9px] font-mono-tabular leading-tight text-slate-500">
+                    ≥{recommendedMinPlayers} người
                   </div>
                 </div>
 
-                {/* Footer: Stepper for Card Count */}
-                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/10">
-                  <span className="text-[11px] text-slate-300">Số lượng bài:</span>
-                  <div className="flex items-center gap-2 font-mono-tabular">
-                    <button
-                      type="button"
-                      disabled={!canDecrease}
-                      aria-label={`Giảm ${meta.nameVi}`}
-                      onClick={() =>
-                        onUpdateDeck({
-                          ...clampedDeck,
-                          [key]: Math.max(0, count - 1),
-                        })
-                      }
-                      className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white text-xs font-bold cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="text-xs font-bold text-white w-5 text-center">
-                      {count}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={!canIncrease}
-                      aria-label={`Tăng ${meta.nameVi}`}
-                      onClick={() =>
-                        onUpdateDeck({
-                          ...clampedDeck,
-                          [key]: count + 1,
-                        })
-                      }
-                      className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white text-xs font-bold cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
+                <button
+                  type="button"
+                  data-testid={`role-info-btn-${roleId}`}
+                  onClick={() => setInspectingRoleId(roleId)}
+                  aria-label={`Giải thích vai trò ${meta.nameVi}`}
+                  title={`Xem giải thích chi tiết vai trò ${meta.nameVi}`}
+                  className="w-6 h-6 rounded-md bg-white/5 hover:bg-[#d4af37]/25 border border-white/10 hover:border-[#d4af37]/60 text-[#d4af37] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Inline card-count stepper */}
+                <div className="flex items-center gap-0.5 shrink-0 font-mono-tabular">
+                  <button
+                    type="button"
+                    disabled={!canDecrease}
+                    aria-label={`Giảm ${meta.nameVi}`}
+                    onClick={() =>
+                      onUpdateDeck({
+                        ...clampedDeck,
+                        [key]: Math.max(0, count - 1),
+                      })
+                    }
+                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 disabled:opacity-25 text-white flex items-center justify-center cursor-pointer active:scale-90 transition-all"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span
+                    className={`text-xs font-bold w-4 text-center ${
+                      count > 0 ? 'text-white' : 'text-slate-500'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!canIncrease}
+                    aria-label={`Tăng ${meta.nameVi}`}
+                    onClick={() =>
+                      onUpdateDeck({
+                        ...clampedDeck,
+                        [key]: count + 1,
+                      })
+                    }
+                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 disabled:opacity-25 text-white flex items-center justify-center cursor-pointer active:scale-90 transition-all"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
             );
           })}
 
-          {/* Remaining Auto-Calculated Villager Card (Clean & Compact) */}
+          {/* Remaining Auto-Calculated Villager Card (matches the compact row layout) */}
           {(activeTab === 'all' || activeTab === 'villagers') && (
-            <div className="rounded-xl bg-[#161321] border border-slate-500/30 p-2.5 sm:p-3 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between gap-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
-                    <span className="text-xs font-bold text-slate-200 truncate">
-                      {ROLE_CATALOG.villager.nameVi}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      data-testid="role-info-btn-villager"
-                      onClick={() => setInspectingRoleId('villager')}
-                      aria-label="Giải thích vai trò Dân Làng"
-                      title="Ấn để xem giải thích chi tiết vai trò Dân Làng"
-                      className="p-1 rounded-md bg-white/5 hover:bg-[#d4af37]/25 border border-white/10 hover:border-[#d4af37]/60 text-[#d4af37] flex items-center justify-center cursor-pointer transition-colors"
-                    >
-                      <Info className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                      Tự động
-                    </span>
-                  </div>
-                </div>
+            <div className="flex items-center gap-1.5 rounded-xl border border-slate-500/30 bg-[#161321] px-2 py-1.5">
+              <span className="w-7 h-7 rounded-lg border border-slate-500/40 bg-slate-700/30 text-slate-300 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4" />
+              </span>
 
-                <div className="flex items-center justify-between mt-1.5 text-[11px]">
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800/80 border border-slate-600/40 text-slate-300">
-                    Phe Dân Làng
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setInspectingRoleId('villager')}
-                    className="text-[10px] text-[#d4af37] hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <span>Giải thích</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] sm:text-xs font-bold truncate leading-tight text-slate-200">
+                  {ROLE_CATALOG.villager.nameVi}
                 </div>
+                <div className="text-[9px] leading-tight text-slate-500">Tự động lấp đầy</div>
               </div>
 
-              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/10">
-                <span className="text-[11px] text-slate-400">Số ghế còn lại:</span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono-tabular font-bold text-white">
-                  {villagerCount} Dân Làng
-                </span>
-              </div>
+              <button
+                type="button"
+                data-testid="role-info-btn-villager"
+                onClick={() => setInspectingRoleId('villager')}
+                aria-label="Giải thích vai trò Dân Làng"
+                title="Xem giải thích chi tiết vai trò Dân Làng"
+                className="w-6 h-6 rounded-md bg-white/5 hover:bg-[#d4af37]/25 border border-white/10 hover:border-[#d4af37]/60 text-[#d4af37] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+
+              <span className="px-2 py-1 rounded-md bg-slate-800 text-[11px] font-mono-tabular font-bold text-white shrink-0">
+                ×{villagerCount}
+              </span>
             </div>
           )}
         </div>

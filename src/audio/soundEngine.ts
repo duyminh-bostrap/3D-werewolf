@@ -1,6 +1,6 @@
 /**
  * Procedural Gothic Horror Web Audio Synthesizer
- * Zero external MP3 dependencies — 100% Web Audio API synthesis.
+ * Background music with synthesized sound effects.
  */
 
 class GothicSoundEngine {
@@ -15,11 +15,12 @@ class GothicSoundEngine {
   private bgmLoopStart = 0;
   private bgmLoopEnd = 0; // 0 means full track loop
   private unlockBound = false;
+  private lastCardFlipTime = -Infinity;
 
   private ensureBgmAudio(): HTMLAudioElement | null {
     if (typeof window === 'undefined') return null;
     if (!this.bgmAudio) {
-      const audio = new Audio('/assets/gothic-bgm-loop.wav');
+      const audio = new Audio('/assets/werewolf-ambient-loop.mp3');
       audio.loop = true;
       audio.volume = this.isMuted ? 0 : 0.42;
       audio.preload = 'auto';
@@ -105,7 +106,7 @@ class GothicSoundEngine {
   }
 
   /**
-   * Starts the Gothic background music loop (/assets/gothic-bgm-loop.wav) + atmospheric wind.
+   * Starts the Gothic background music loop (/assets/werewolf-ambient-loop.mp3) + atmospheric wind.
    */
   public startAmbient(mode: 'night' | 'day' | 'lobby' = 'lobby') {
     const bgm = this.ensureBgmAudio();
@@ -284,6 +285,8 @@ class GothicSoundEngine {
     const ctx = this.ensureContext();
     if (!ctx) return;
     const now = ctx.currentTime;
+    if (now - this.lastCardFlipTime < 1.55) return;
+    this.lastCardFlipTime = now;
 
     // Whoosh noise burst
     const buf = ctx.createBuffer(1, ctx.sampleRate * 0.25, ctx.sampleRate);

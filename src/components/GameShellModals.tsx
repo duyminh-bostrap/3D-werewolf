@@ -1,3 +1,4 @@
+import { BrandMark } from './BrandMark';
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
@@ -24,6 +25,8 @@ import {
 import { createCharacterAvatar } from '../three/proceduralAssets';
 
 interface TitleScreenOverlayProps {
+  hasCharacter: boolean;
+  onCompleteCharacter: () => void;
   playerName: string;
   roomCode: string;
   appearance: CharacterAppearance;
@@ -53,6 +56,8 @@ const QUICK_CLOAKS = [
 ];
 
 export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
+  hasCharacter,
+  onCompleteCharacter,
   playerName,
   roomCode,
   appearance,
@@ -62,7 +67,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
   onStartGame,
   onOpenCustomizer,
 }) => {
-  const [step, setStep] = useState<'character' | 'room'>('character');
+  const [step, setStep] = useState<'character' | 'room'>(hasCharacter ? 'room' : 'character');
   const [previewWolf, setPreviewWolf] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState(roomCode || 'GOTHIC');
 
@@ -198,49 +203,9 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
   return (
     <div className="fixed inset-0 z-40 pointer-events-none flex flex-col justify-center p-3 sm:p-6 bg-gradient-to-b from-[#07060b]/85 via-[#07060b]/70 to-[#07060b]/92 overflow-y-auto">
       <div className="max-w-sm w-full mx-auto pointer-events-auto my-auto space-y-3">
-        {/* Ultra-Clean Mobile Header Lockup */}
-        <div className="flex items-center justify-between gap-2 px-1">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <svg
-              viewBox="0 0 72 72"
-              className="w-10 h-10 shrink-0"
-              aria-hidden="true"
-            >
-              <circle
-                cx="36"
-                cy="36"
-                r="32"
-                fill="#180a10"
-                stroke="#d4af37"
-                strokeWidth="2.5"
-              />
-              <circle cx="36" cy="36" r="24" fill="#7f1d1d" opacity="0.85" />
-              <path
-                d="M20 56 L26 36 L22 26 L31 28 L36 14 L41 28 L50 26 L46 36 L52 56 Z"
-                fill="#09080d"
-                stroke="#d4af37"
-                strokeWidth="1.5"
-              />
-              <circle cx="32" cy="31" r="2" fill="#ef4444" />
-              <circle cx="40" cy="31" r="2" fill="#ef4444" />
-            </svg>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-extrabold font-display tracking-tight text-white leading-tight">
-                HUYẾT NGUYỆT THÔN
-              </h1>
-              <p
-                data-testid="title-short-subtitle"
-                className="text-[11px] text-[#d4af37] font-medium"
-              >
-                Ma Sói 3D
-              </p>
-            </div>
-          </div>
-
-          {/* Compact Step Pill */}
-          <div className="shrink-0 rounded-lg bg-[#14101e] border border-[#d4af37]/35 px-2 py-0.5 text-[11px] font-mono-tabular font-bold text-[#d4af37]">
-            {step === 'character' ? '1/2' : '2/2'}
-          </div>
+        <div className="relative">
+          <BrandMark />
+          <span className="absolute right-0 top-2 rounded-lg border border-[#d4af37]/25 bg-[#14101e] px-2 py-1 text-[11px] font-semibold text-[#d4af37]">{step === 'character' ? '1/2' : '2/2'}</span>
         </div>
 
         {/* STEP 1: 3D Character Preview + Name + Quick Outfit */}
@@ -310,9 +275,6 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
                 <span className="font-bold text-white truncate">
                   {playerName.trim() || 'Lữ Khách'}
                 </span>
-                <span className="text-[11px] text-[#d4af37] font-medium truncate">
-                  {appearance.epithet}
-                </span>
               </div>
             </div>
 
@@ -361,7 +323,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => onChangeAppearance({ ...preset })}
+                      onClick={() => onChangeAppearance({ ...preset, epithet: appearance.epithet })}
                       className={`px-2 py-1.5 rounded-lg text-[11px] border text-left flex items-center gap-1.5 transition-colors cursor-pointer ${
                         selected
                           ? 'bg-[#9e1b24]/35 border-[#d4af37] text-white font-semibold'
@@ -372,7 +334,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
                         className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/40"
                         style={{ backgroundColor: preset.cloakColor }}
                       />
-                      <span className="truncate">{QUICK_HEADGEAR[i]?.label || preset.epithet}</span>
+                      <span className="truncate">{QUICK_HEADGEAR[i]?.label || `Trang phục ${i + 1}`}</span>
                     </button>
                   );
                 })}
@@ -383,7 +345,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
             <button
               type="button"
               data-testid="step1-next-btn"
-              onClick={() => setStep('room')}
+              onClick={() => { onCompleteCharacter(); setStep('room'); }}
               className="w-full py-2.5 px-4 rounded-xl bg-[#9e1b24] hover:bg-[#b91c1c] text-white font-bold text-sm shadow-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <span>Tiếp Tục</span>
@@ -406,9 +368,6 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-white truncate">
                     {playerName.trim() || 'Lữ Khách'}
-                  </div>
-                  <div className="text-[10px] text-[#d4af37] truncate">
-                    {appearance.epithet}
                   </div>
                 </div>
               </div>
@@ -547,6 +506,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onPlayAgain,
   onReturnLobby,
 }) => {
+  if (winner === 'ongoing') return null;
   const isWolfWin = winner === 'werewolves';
   const isLoverWin = winner === 'lovers';
   const isSoloWin = winner === 'solo';
@@ -559,14 +519,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       aria-modal="true"
       aria-labelledby="gameover-modal-title"
     >
-      <div className="w-full max-w-xl rounded-2xl bg-[#120e1a] border-2 border-[#d4af37]/60 p-6 shadow-2xl space-y-5">
-        <div className="text-center space-y-1">
-          <span className="text-xs font-mono-tabular tracking-widest text-[#d4af37]">
-            KẾT THÚC ĐÊM HUYẾT NGUYỆT
+      <div className="flex max-h-[calc(100dvh-32px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#d4af37]/35 bg-[#120e1a] shadow-2xl">
+        <div className="shrink-0 space-y-2 border-b border-white/10 px-5 py-5 text-center">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d4af37]">
+            Kết thúc ván
           </span>
           <h2
             id="gameover-modal-title"
-            className={`text-3xl font-extrabold font-display ${
+            className={`text-2xl font-bold leading-tight ${
               isWolfWin
                 ? 'text-red-500'
                 : isLoverWin
@@ -577,83 +537,69 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             }`}
           >
             {isWolfWin
-              ? 'Bầy Ma Sói Thống Trị'
+              ? 'Ma Sói chiến thắng'
               : isLoverWin
-              ? 'Cặp Đôi Định Mệnh Chiến Thắng'
+              ? 'Cặp đôi chiến thắng'
               : isSoloWin
-              ? 'Kẻ Độc Hành Chiến Thắng'
-              : 'Phe Dân Làng Chiến Thắng'}
+              ? 'Kẻ độc hành chiến thắng'
+              : 'Dân Làng chiến thắng'}
           </h2>
-          <p className="text-xs text-slate-300 max-w-md mx-auto">{winReason}</p>
+          <p className="mx-auto max-w-sm text-xs leading-relaxed text-slate-400">{winReason}</p>
         </div>
 
-        {/* 3 Tabular-Nums Mastery Stat Tiles */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-[#1a1524] border border-white/10 p-3 text-center">
-            <div className="text-[11px] text-slate-400 uppercase">Số Đêm Sinh Tử</div>
-            <div className="text-2xl font-bold font-mono-tabular text-white mt-0.5">
-              {dayNumber}
+        <div className="game-results-scroll min-h-0 space-y-4 overflow-y-auto p-4">
+          <dl className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-white/10 bg-[#1a1524] p-3">
+              <dt className="text-xs text-slate-400">Số đêm</dt>
+              <dd className="mt-1 text-xl font-bold tabular-nums text-white">{dayNumber}</dd>
             </div>
-          </div>
-          <div className="rounded-xl bg-[#1a1524] border border-white/10 p-3 text-center">
-            <div className="text-[11px] text-slate-400 uppercase">Vai Trò Của Bạn</div>
-            <div className="text-sm font-bold text-[#d4af37] mt-1.5 truncate">
-              {ROLE_CATALOG[localRole].nameVi}
+            <div className="rounded-xl border border-white/10 bg-[#1a1524] p-3">
+              <dt className="text-xs text-slate-400">Sống sót</dt>
+              <dd className="mt-1 text-xl font-bold tabular-nums text-emerald-400">{survivorsCount}<span className="text-sm font-medium text-slate-400"> / {players.length}</span></dd>
             </div>
-          </div>
-          <div className="rounded-xl bg-[#1a1524] border border-white/10 p-3 text-center">
-            <div className="text-[11px] text-slate-400 uppercase">Người Sống Sót</div>
-            <div className="text-2xl font-bold font-mono-tabular text-emerald-400 mt-0.5">
-              {survivorsCount}/{players.length}
+            <div className="col-span-2 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-3">
+              <dt className="text-xs text-slate-400">Vai trò của bạn</dt>
+              <dd className="mt-1 break-words text-sm font-semibold text-[#e8cd82]">{ROLE_CATALOG[localRole].nameVi}</dd>
             </div>
-          </div>
+          </dl>
+
+          <section aria-label="Kết quả người chơi" className="space-y-2">
+            <h3 className="text-xs font-semibold text-slate-400">Người chơi · {players.length}</h3>
+            <ul className="divide-y divide-white/5 rounded-xl border border-white/10 bg-[#0b0910]">
+              {players.map((p) => {
+                const roleMeta = ROLE_CATALOG[p.role];
+                return (
+                  <li key={p.id} className="flex items-start gap-2.5 px-3 py-3">
+                    <span className="w-6 shrink-0 pt-0.5 text-xs tabular-nums text-slate-500">{p.seatIndex + 1}</span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="break-words text-sm font-semibold leading-snug text-white">{p.name}</p>
+                      <p className="break-words text-xs leading-relaxed" style={{ color: roleMeta.accentColor }}>{roleMeta.nameVi}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${p.isAlive ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
+                      {p.isAlive ? 'Sống sót' : 'Đã chết'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         </div>
 
-        {/* Full Role Reveal Roster */}
-        <div className="max-h-48 overflow-y-auto rounded-xl bg-[#0b0910] border border-white/10 divide-y divide-white/5">
-          {players.map((p) => {
-            const roleMeta = ROLE_CATALOG[p.role];
-            return (
-              <div
-                key={p.id}
-                className="flex items-center justify-between px-3.5 py-2 text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono-tabular text-slate-400">
-                    #{p.seatIndex + 1}
-                  </span>
-                  <span className="font-semibold text-white">{p.name}</span>
-                  <span className="text-slate-500">·</span>
-                  <span className={p.isAlive ? 'text-emerald-400' : 'text-slate-500'}>
-                    {p.isAlive ? 'Sống sót' : 'Đã ngã xuống'}
-                  </span>
-                </div>
-                <span
-                  className="font-semibold"
-                  style={{ color: roleMeta.accentColor }}
-                >
-                  {roleMeta.nameVi}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-1">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 bg-[#120e1a] p-4">
           <button
             type="button"
             onClick={onReturnLobby}
-            className="px-4 py-2.5 rounded-xl bg-[#1d1828] hover:bg-[#282136] text-slate-200 border border-white/15 text-xs font-semibold cursor-pointer"
+            className="min-h-11 rounded-xl border border-white/15 bg-[#1d1828] px-3 text-sm font-semibold text-slate-200 transition-colors hover:bg-[#282136] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
           >
-            Về Sảnh Chờ 3D
+            Về sảnh
           </button>
           <button
             type="button"
             data-start="true"
             onClick={onPlayAgain}
-            className="px-6 py-2.5 rounded-xl bg-[#9e1b24] hover:bg-[#b91c1c] text-white font-bold text-sm shadow-lg cursor-pointer"
+            className="min-h-11 rounded-xl bg-[#9e1b24] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#b91c1c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
           >
-            Chơi Lại Ván Mới
+            Chơi lại
           </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { deathNotice } from './src/game/deathNotifications';
 import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
@@ -71,6 +72,8 @@ export interface RoomPublicState {
   nightCompletedCount?: number;
   nightRequiredCount?: number;
   allNightActionsSubmitted?: boolean;
+  myNightActionRequired?: boolean;
+  myNightActionSubmitted?: boolean;
   winner: 'ongoing' | Faction;
   winReason: string;
   logs: string[];
@@ -148,7 +151,7 @@ function getOrCreateRoom(roomCode: string): ServerRoom {
       roomCode: normalized,
       phase: 'lobby',
       dayNumber: 1,
-      maxPlayers: 8,
+      maxPlayers: MAX_ROOM_PLAYERS,
       players: [],
       roleDeck: { ...DEFAULT_ROLE_DECK },
       witchState: { hasHealPotion: true, hasPoisonPotion: true },
@@ -198,8 +201,10 @@ function updateNightProgressFields(room: ServerRoom) {
   room.allNightActionsSubmitted = progress.allCompleted;
 }
 
-function serializeRoomState(room: ServerRoom): RoomPublicState {
+function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicState {
   updateNightProgressFields(room);
+  const viewer = viewerId ? room.players.find((p) => p.id === viewerId) : undefined;
+  const visibleMessages = room.messages.filter((m) => canPlayerSeeMessage(viewer, m));
   return {
     roomCode: room.roomCode,
     phase: room.phase,
@@ -219,22 +224,50 @@ function serializeRoomState(room: ServerRoom): RoomPublicState {
     nightCompletedCount: room.nightCompletedCount ?? 0,
     nightRequiredCount: room.nightRequiredCount ?? 0,
     allNightActionsSubmitted: room.allNightActionsSubmitted ?? false,
+    myNightActionRequired: Boolean(room.phase === 'night' && viewer?.isAlive && doesRoleHaveNightAction(viewer.role, room.dayNumber, room.witchState, Boolean(room.lovers))),
+    myNightActionSubmitted: Boolean(room.phase === 'night' && viewerId && room.nightActions.actedPlayerIds?.includes(viewerId)),
     winner: room.winner,
     winReason: room.winReason,
     logs: room.logs.slice(-30),
-    messages: room.messages.slice(-50),
+    messages: visibleMessages.slice(-50),
   };
 }
 
+/**
+ * Wolf-night messages stay invisible to the village; everyone else sees global chat.
+ */
+function canPlayerSeeMessage(viewer: PlayerState | undefined, msg: ChatMessage): boolean {
+  if (msg.channel === 'wolves') {
+    return Boolean(viewer && viewer.isAlive && isWolfPackRole(viewer.role));
+  }
+  return true;
+}
+
+/**
+ * Voice routing rules: the dead cannot speak or listen, and at night only the wolf
+ * pack can hear each other (the village stays silent).
+ */
+function canHearVoice(room: ServerRoom, listenerId: string, speakerId: string): boolean {
+  const listener = room.players.find((p) => p.id === listenerId);
+  const speaker = room.players.find((p) => p.id === speakerId);
+  if (!listener || !speaker) return false;
+  if (!listener.isAlive || !speaker.isAlive) return false;
+  if (room.phase === 'night') {
+    return isWolfPackRole(listener.role) && isWolfPackRole(speaker.role);
+  }
+  return true;
+}
+
 function broadcastRoomState(room: ServerRoom) {
-  const payload = JSON.stringify({
-    type: 'room:state',
-    state: serializeRoomState(room),
-  });
-  for (const ws of room.clients.values()) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(payload);
-    }
+  updateNightProgressFields(room);
+  for (const [pid, ws] of room.clients.entries()) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    ws.send(
+      JSON.stringify({
+        type: 'room:state',
+        state: serializeRoomState(room, pid),
+      })
+    );
   }
 }
 
@@ -402,6 +435,10 @@ function enterNightPhase(room: ServerRoom) {
   broadcastRoomState(room);
 }
 
+function announceDeath(room: ServerRoom, player: PlayerState) {
+  room.messages.push({ id: `death_${Date.now()}_${player.id}`, senderId: 'system', senderName: 'Hệ thống', text: deathNotice(player), channel: 'system', timestamp: Date.now() });
+}
+
 function executeResolveNight(room: ServerRoom) {
   if (room.phase !== 'night') return;
   clearRoomTimers(room);
@@ -438,7 +475,12 @@ function executeResolveNight(room: ServerRoom) {
 
   for (const deadId of res.deadPlayerIds) {
     const victim = room.players.find((p) => p.id === deadId);
-    if (victim) victim.isAlive = false;
+    if (victim && victim.isAlive) {
+      announceDeath(room, victim);
+      victim.isAlive = false;
+      victim.isMuted = true;
+      victim.isSpeaking = false;
+    }
   }
 
   room.logs.push(...res.logs);
@@ -530,7 +572,12 @@ function executeResolveTrialVerdict(room: ServerRoom) {
 
   for (const deadId of verdict.deadPlayerIds) {
     const p = room.players.find((pl) => pl.id === deadId);
-    if (p) p.isAlive = false;
+    if (p && p.isAlive) {
+      announceDeath(room, p);
+      p.isAlive = false;
+      p.isMuted = true;
+      p.isSpeaking = false;
+    }
   }
   room.logs.push(...verdict.logs);
 
@@ -612,19 +659,25 @@ async function startServer() {
           const appearance: CharacterAppearance =
             msg.appearance || APPEARANCE_PRESETS[0];
 
+          const room = getOrCreateRoom(roomCode);
+          const existingPlayer = room.players.find((p) => p.id === playerId);
+          const hasBotSeat = room.phase === 'lobby' && room.players.some((p) => p.isBot);
+          if (!existingPlayer && !hasBotSeat && room.players.length >= Math.min(MAX_ROOM_PLAYERS, room.maxPlayers ?? MAX_ROOM_PLAYERS)) {
+            ws.send(JSON.stringify({ type: 'room:error', message: 'Phòng đã đủ người (tối đa 15 người).' }));
+            return;
+          }
+          if (currentRoomCode && currentRoomCode !== roomCode) {
+            const oldRoom = rooms.get(currentRoomCode);
+            if (oldRoom) {
+              oldRoom.clients.delete(currentPlayerId);
+              if (oldRoom.phase === 'lobby') oldRoom.players = oldRoom.players.filter((p) => p.id !== currentPlayerId);
+              broadcastEvent(oldRoom, { type: 'webrtc:peer-left', peerId: currentPlayerId });
+              broadcastRoomState(oldRoom);
+            }
+          }
           currentRoomCode = roomCode;
           currentPlayerId = playerId;
-
-          const room = getOrCreateRoom(roomCode);
           room.clients.set(playerId, ws);
-
-          // Convert any stale disconnected human slots (closed tabs not in room.clients) back to bots
-          room.players.forEach((p, idx) => {
-            if (!p.isBot && p.id !== playerId && !room.clients.has(p.id)) {
-              const usedNames = new Set(room.players.map((pl) => pl.name));
-              room.players[idx] = createBotPlayer(idx, usedNames);
-            }
-          });
 
           let existing = room.players.find((p) => p.id === playerId);
           if (!existing) {
@@ -648,9 +701,6 @@ async function startServer() {
                 loverId: null,
               };
               room.players.push(existing);
-              for (let i = 1; i < 8; i++) {
-                room.players.push(createBotPlayer(i));
-              }
             } else {
               const botIdx = room.players.findIndex((p) => p.isBot);
               if (botIdx !== -1 && room.phase === 'lobby') {
@@ -702,14 +752,25 @@ async function startServer() {
           } else {
             existing.name = playerName;
             existing.appearance = appearance;
+            existing.isBot = false;
+            if (!room.players.some((p) => p.isHost && !p.isBot)) existing.isHost = true;
           }
 
           broadcastRoomState(room);
-          broadcastEvent(
-            room,
-            { type: 'webrtc:peer-joined', peerId: playerId, peerName: playerName },
-            playerId
-          );
+          // Only announce the newcomer to players who are allowed to hear them
+          for (const otherId of room.clients.keys()) {
+            if (otherId === playerId) continue;
+            if (!canHearVoice(room, otherId, playerId)) continue;
+            const otherWs = room.clients.get(otherId);
+            if (!otherWs || otherWs.readyState !== WebSocket.OPEN) continue;
+            otherWs.send(
+              JSON.stringify({
+                type: 'webrtc:peer-joined',
+                peerId: playerId,
+                peerName: playerName,
+              })
+            );
+          }
           return;
         }
 
@@ -753,8 +814,17 @@ async function startServer() {
           case 'voice:status': {
             const p = room.players.find((pl) => pl.id === currentPlayerId);
             if (p) {
-              if (typeof msg.isMuted === 'boolean') p.isMuted = msg.isMuted;
-              if (typeof msg.isSpeaking === 'boolean') p.isSpeaking = msg.isSpeaking;
+              // The dead are forced to silence
+              p.isMuted = p.isAlive
+                ? typeof msg.isMuted === 'boolean'
+                  ? msg.isMuted
+                  : p.isMuted
+                : true;
+              p.isSpeaking = p.isAlive
+                ? typeof msg.isSpeaking === 'boolean'
+                  ? msg.isSpeaking
+                  : p.isSpeaking
+                : false;
               broadcastEvent(
                 room,
                 {
@@ -772,7 +842,13 @@ async function startServer() {
           case 'webrtc:signal': {
             const targetId = String(msg.targetId || '');
             const targetWs = room.clients.get(targetId);
-            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+            // Enforce voice privacy server-side: no relay outside the allowed channel
+            if (
+              targetWs &&
+              targetWs.readyState === WebSocket.OPEN &&
+              canHearVoice(room, targetId, currentPlayerId) &&
+              canHearVoice(room, currentPlayerId, targetId)
+            ) {
               targetWs.send(
                 JSON.stringify({
                   type: 'webrtc:signal',
@@ -797,7 +873,7 @@ async function startServer() {
             const sender = room.players.find((pl) => pl.id === currentPlayerId);
             const target = room.players.find((pl) => pl.id === String(msg.targetId || ''));
             const action = String(msg.action || 'heart') as SocialInteractionType;
-            if (sender && target) {
+            if (sender && target && sender.id !== target.id && ['friend', 'heart', 'stone'].includes(action)) {
               broadcastEvent(room, {
                 type: 'player:interacted',
                 senderId: sender.id,
@@ -812,7 +888,7 @@ async function startServer() {
 
           case 'room:add-bot': {
             if (room.phase !== 'lobby') break;
-            if (room.players.length < MAX_ROOM_PLAYERS) {
+            if (room.players.length < Math.min(MAX_ROOM_PLAYERS, room.maxPlayers ?? MAX_ROOM_PLAYERS)) {
               const usedNames = new Set(room.players.map((p) => p.name));
               const newBot = createBotPlayer(room.players.length, usedNames);
               room.players.push(newBot);
@@ -866,13 +942,7 @@ async function startServer() {
           case 'room:set-player-count': {
             if (room.phase !== 'lobby') break;
             const targetCount = clampRoomPlayerCount(Number(msg.targetCount) || 8);
-            room.maxPlayers = targetCount;
-            if (msg.fillBots !== false) {
-              while (room.players.length < targetCount) {
-                const usedNames = new Set(room.players.map((p) => p.name));
-                room.players.push(createBotPlayer(room.players.length, usedNames));
-              }
-            }
+            room.maxPlayers = Math.min(MAX_ROOM_PLAYERS, Math.max(targetCount, room.players.length));
             while (room.players.length > targetCount) {
               const lastBotIdx = [...room.players].reverse().findIndex((p) => p.isBot);
               if (lastBotIdx === -1) break;
@@ -954,7 +1024,7 @@ async function startServer() {
 
           case 'game:start': {
             const caller = room.players.find((p) => p.id === currentPlayerId);
-            if (caller && !caller.isHost) {
+            if (!caller || !caller.isHost || room.phase !== 'lobby') {
               break;
             }
             const validation = validateLobbyStart(room.players, room.maxPlayers ?? 8);
@@ -1035,7 +1105,7 @@ async function startServer() {
           case 'game:night-action': {
             if (room.phase !== 'night') break;
             const actor = room.players.find((p) => p.id === currentPlayerId);
-            if (!actor || !actor.isAlive) break;
+            if (!actor || !actor.isAlive || room.nightActions.actedPlayerIds?.includes(actor.id) || !doesRoleHaveNightAction(actor.role, room.dayNumber, room.witchState, Boolean(room.lovers))) break;
 
             const targetId = msg.targetId ? String(msg.targetId) : null;
             const actionType = String(msg.actionType || '');
@@ -1120,11 +1190,6 @@ async function startServer() {
             break;
           }
 
-          case 'game:resolve-night': {
-            executeResolveNight(room);
-            break;
-          }
-
           case 'game:start-voting': {
             if (room.phase === 'day_discussion') {
               room.phase = 'day_voting';
@@ -1136,11 +1201,11 @@ async function startServer() {
 
           case 'game:submit-vote': {
             if (room.phase !== 'day_discussion' && room.phase !== 'day_voting') break;
-            room.phase = 'day_voting';
             const voter = room.players.find((p) => p.id === currentPlayerId);
-            if (voter && voter.isAlive && msg.targetId) {
-              room.dayVotes[voter.id] = String(msg.targetId);
-            }
+            const targetId = typeof msg.targetId === 'string' ? msg.targetId : '';
+            if (!voter?.isAlive || (targetId !== 'skip' && !room.players.some((p) => p.id === targetId && p.isAlive))) break;
+            room.phase = 'day_voting';
+            room.dayVotes[voter.id] = targetId;
             fillBotDayVotes(room);
             broadcastRoomState(room);
 
@@ -1154,15 +1219,6 @@ async function startServer() {
                   executeResolveDayDiscussion(room);
                 }
               }, 900);
-            }
-            break;
-          }
-
-          case 'game:resolve-vote': {
-            if (room.phase === 'day_discussion' || room.phase === 'day_voting') {
-              executeResolveDayDiscussion(room);
-            } else if (room.phase === 'day_trial') {
-              executeResolveTrialVerdict(room);
             }
             break;
           }
@@ -1206,6 +1262,7 @@ async function startServer() {
           case 'game:reset-lobby': {
             clearRoomTimers(room);
             room.phase = 'lobby';
+            room.players = room.players.filter((p) => p.isBot || room.clients.has(p.id));
             room.dayNumber = 1;
             room.winner = 'ongoing';
             room.winReason = '';
@@ -1236,13 +1293,18 @@ async function startServer() {
           case 'chat:send': {
             const sender = room.players.find((p) => p.id === currentPlayerId);
             const text = String(msg.text || '').trim().slice(0, 220);
-            if (sender && text) {
+            // Fallen players can no longer speak (and cannot leak info to the living)
+            if (sender && sender.isAlive && text) {
+              // Channel is decided by the server so it cannot be spoofed by clients:
+              // wolves whispering at night go to the private wolf channel.
+              const channel: ChatMessage['channel'] =
+                room.phase === 'night' && isWolfPackRole(sender.role) ? 'wolves' : 'global';
               const chatMsg: ChatMessage = {
                 id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 senderId: sender.id,
                 senderName: sender.name,
                 text,
-                channel: msg.channel || 'global',
+                channel,
                 timestamp: Date.now(),
               };
               room.messages.push(chatMsg);
@@ -1282,12 +1344,22 @@ async function startServer() {
     ws.on('close', () => {
       if (currentRoomCode && currentPlayerId) {
         const room = rooms.get(currentRoomCode);
-        if (room) {
+        if (room && room.clients.get(currentPlayerId) === ws) {
           room.clients.delete(currentPlayerId);
-          broadcastEvent(room, {
-            type: 'webrtc:peer-left',
-            peerId: currentPlayerId,
-          });
+          const player = room.players.find((p) => p.id === currentPlayerId);
+          if (player) {
+            if (room.phase === 'lobby') room.players = room.players.filter((p) => p.id !== currentPlayerId);
+            player.isHost = false;
+            player.isMuted = true;
+            player.isSpeaking = false;
+            room.logs.push(`${player.name} đã rời phòng.`);
+          }
+          if (!room.players.some((p) => p.isHost && !p.isBot)) {
+            const nextHost = room.players.find((p) => !p.isBot && room.clients.has(p.id));
+            if (nextHost) nextHost.isHost = true;
+          }
+          broadcastEvent(room, { type: 'webrtc:peer-left', peerId: currentPlayerId });
+          broadcastRoomState(room);
         }
       }
     });

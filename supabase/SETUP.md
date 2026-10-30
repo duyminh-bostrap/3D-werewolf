@@ -1,0 +1,19 @@
+# Supabase setup
+
+The app supports guest play, Google and Apple. Guest profiles can be linked to a provider to retain the same user ID and saved character. Existing account login loads the remote character instead of overwriting it with local guest edits.
+
+1. Run `profiles.sql` and `friends.sql` in the project's SQL Editor. The new friends table uses owner-specific RLS; the SQL closes the previous public-access table without deleting it.
+2. Authentication > Providers: enable Anonymous, Google and Apple. Enable manual identity linking for upgrading guests.
+3. Google: create a Web OAuth client in Google Auth Platform. Add your app origin (local: `http://localhost:3000`) and this authorized redirect URI: `https://xxdahuhhtadwabdbhvms.supabase.co/auth/v1/callback`. Enter its Client ID and Client Secret in Supabase's Google provider.
+4. Apple: configure a Services ID, Team ID, Key ID and signing key through Apple Developer, with the same Supabase callback. Enter the Apple OAuth credentials in Supabase. Web OAuth client secrets must be renewed at least every six months.
+5. Authentication > URL Configuration: set the production Site URL, and allow the app callback URLs, including `http://localhost:3000/` for local testing.
+6. Keep provider secrets in Supabase, never in Vite variables. The app only uses VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.
+
+OAuth is opened at the top level because providers can block embedded sign-in. The development phone preview is bypassed on OAuth callback URLs.
+
+The friends list is a saved contact list with room links, not mutual friend requests or live presence. Client player IDs in the WebSocket game are currently separate from Supabase Auth; game-server identity verification is not part of this OAuth change.
+
+Official docs:
+- https://supabase.com/docs/guides/auth/social-sign-in/auth-google
+- https://supabase.com/docs/guides/auth/social-sign-in/auth-apple
+- https://supabase.com/docs/guides/auth/auth-identity-linking

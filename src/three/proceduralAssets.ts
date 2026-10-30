@@ -709,6 +709,8 @@ export function createBonfireAndGallowsPlaza(): {
 
   // Part 6: Ancient Wooden Gallows Frame behind the fire (x = 4.6, z = -4.2)
   const gallowsGroup = new THREE.Group();
+  gallowsGroup.name = 'gallows';
+  gallowsGroup.visible = false;
   gallowsGroup.position.set(5.2, 0, -5.2);
   gallowsGroup.rotation.y = -Math.PI / 4;
 
@@ -1491,9 +1493,9 @@ export function createCharacterAvatar(
   const ringGeo = new THREE.RingGeometry(0.68, 0.92, 36);
   ringGeo.rotateX(-Math.PI / 2);
   const ringMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(appearance.trimColor || '#d4af37'),
+    color: 0xe2e8f0,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.65,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -1544,12 +1546,18 @@ export function createPlayerLabelSprite(
   isSpeaking: boolean,
   voteCount: number,
   isLocal: boolean,
-  isSelected = false
+  isSelected = false,
+  compact = false,
+  isHost = false
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 112;
+  canvas.width = compact ? 320 : 384;
+  canvas.height = compact ? 72 : 112;
   const ctx = canvas.getContext('2d')!;
+
+  if (compact) {
+    return createCompactPlayerLabelSprite(canvas, ctx, name, isAlive, isSpeaking, voteCount, isLocal, isSelected, isHost);
+  }
 
   // Dark Gothic plaque background
   ctx.fillStyle = isSelected
@@ -1577,7 +1585,7 @@ export function createPlayerLabelSprite(
 
   // Seat Number Badge
   ctx.fillStyle = isSelected ? '#fde047' : isAlive ? '#d4af37' : '#64748b';
-  ctx.font = 'bold 20px "JetBrains Mono", monospace';
+  ctx.font = 'bold 20px "Be Vietnam Pro", sans-serif';
   ctx.fillText(`#${seatIndex + 1}`, 28, 44);
 
   // Player Name
@@ -1611,7 +1619,7 @@ export function createPlayerLabelSprite(
     ctx.arc(336, 52, 22, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px "JetBrains Mono", monospace';
+    ctx.font = 'bold 22px "Be Vietnam Pro", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(String(voteCount), 336, 60);
   }
@@ -1627,6 +1635,75 @@ export function createPlayerLabelSprite(
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(isSelected ? 2.02 : 1.85, isSelected ? 0.58 : 0.52, 1);
   sprite.position.set(0, 2.72, 0);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
+/**
+ * Compact (mobile) overhead nameplate: only the player name, rendered larger so it
+ * stays legible on small screens where the panoramic camera sits far away.
+ */
+function createCompactPlayerLabelSprite(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  isAlive: boolean,
+  isSpeaking: boolean,
+  voteCount: number,
+  isLocal: boolean,
+  isSelected: boolean,
+  isHost: boolean
+): THREE.Sprite {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.fillStyle = isSelected
+    ? 'rgba(110, 18, 28, 0.95)'
+    : isSpeaking
+    ? 'rgba(20, 48, 36, 0.92)'
+    : isLocal
+    ? 'rgba(42, 18, 26, 0.92)'
+    : 'rgba(13, 12, 19, 0.9)';
+  ctx.strokeStyle = isSelected
+    ? '#fbbf24'
+    : isSpeaking
+    ? '#10b981'
+    : voteCount > 0
+    ? '#ef4444'
+    : isLocal
+    ? '#f59e0b'
+    : 'rgba(212, 175, 55, 0.55)';
+  ctx.lineWidth = isSelected ? 4.5 : 3;
+
+  ctx.beginPath();
+  ctx.roundRect(6, 6, w - 12, h - 12, 11);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = isAlive ? '#f8fafc' : '#94a3b8';
+  ctx.font = 'bold 31px "Be Vietnam Pro", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const displayName = name.length > 14 ? name.slice(0, 13) + '…' : name;
+  if (isHost) {
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(20, 24); ctx.lineTo(30, 31); ctx.lineTo(38, 18); ctx.lineTo(46, 31); ctx.lineTo(56, 24); ctx.lineTo(52, 47); ctx.lineTo(24, 47); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = isAlive ? '#f8fafc' : '#94a3b8';
+  }
+  ctx.fillText(displayName, isHost ? (w + 48) / 2 : w / 2, h / 2 + 1, isHost ? w - 82 : w - 24);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(isSelected ? 2.9 : 2.7, isSelected ? 0.66 : 0.61, 1);
+  sprite.position.set(0, 2.58, 0);
   sprite.renderOrder = 10;
   return sprite;
 }
@@ -1720,36 +1797,6 @@ export function createKickableFireball(scene: THREE.Scene): KickableFireballRig 
   const groundScorch = new THREE.Mesh(scorchGeo, scorchMat);
   groundScorch.position.y = -0.49;
   group.add(groundScorch);
-
-  // 6. Floating Crisp 3D Label Badge above the Fireball
-  const labelCanvas = document.createElement('canvas');
-  labelCanvas.width = 320;
-  labelCanvas.height = 68;
-  const lctx = labelCanvas.getContext('2d')!;
-  lctx.fillStyle = 'rgba(28, 12, 14, 0.88)';
-  lctx.strokeStyle = '#f59e0b';
-  lctx.lineWidth = 2.5;
-  lctx.beginPath();
-  lctx.roundRect(8, 8, 304, 52, 26);
-  lctx.fill();
-  lctx.stroke();
-  lctx.fillStyle = '#fde68a';
-  lctx.font = 'bold 20px "Be Vietnam Pro", sans-serif';
-  lctx.textAlign = 'center';
-  lctx.fillText('🔥 CẦU LỬA (Sút / Chạm)', 160, 41);
-
-  const labelTex = new THREE.CanvasTexture(labelCanvas);
-  labelTex.colorSpace = THREE.SRGBColorSpace;
-  const labelSprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: labelTex,
-      transparent: true,
-      depthWrite: false,
-    })
-  );
-  labelSprite.scale.set(1.55, 0.34, 1);
-  labelSprite.position.set(0, 0.96, 0);
-  group.add(labelSprite);
 
   // 7. Raycast Hitbox so players can also tap/click the Fireball to kick it
   const hitbox = new THREE.Mesh(
@@ -1847,7 +1894,6 @@ export function buildGothicVillageEnvironment(
   const { group: bonfireGroup, outerFlame, innerFlame } = createBonfireAndGallowsPlaza();
   scene.add(bonfireGroup);
   obstacles.push({ x: 0, z: 0, radius: 3.1, label: 'Lửa Thiêng Trung Tâm' });
-  obstacles.push({ x: 5.2, z: -5.2, radius: 2.1, label: 'Giá Treo Cổ' });
 
   // 4. Tall Gothic Bell Tower Landmark at (0, -28) framed in initial spawn vista!
   const bellTower = createGothicBellTower(stoneBump);

@@ -2,9 +2,9 @@
 
 @layer base {
   :root {
-    --font-display: 'Playfair Display', Georgia, serif;
-    --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-display: var(--font-sans);
+    --font-mono: var(--font-sans);
   }
 
   body {
@@ -18,7 +18,6 @@
 
   h1, h2, h3, .font-display {
     font-family: var(--font-display);
-    letter-spacing: 0.015em;
   }
 
   .font-mono-tabular {
@@ -42,4 +41,43 @@
 
 .rotate-y-180 {
   transform: rotateY(180deg);
+}
+
+.quick-chat-strip {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.quick-chat-strip::-webkit-scrollbar { display: none; }
+
+.game-results-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a3c54 transparent;
+}
+
+.brand-wordmark {
+  font-family: "Rajdhani", var(--font-sans);
+}
+
+.brand-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16em;
+  padding: 0.12em 0.15em 0.25em;
+  font-size: clamp(32px, 11vw, 46px);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffe5a1;
+  text-shadow: 1px 1px 0 #a46732, 2px 2px 0 #6f251d, 0 5px 10px #000;
+}
+
+.brand-subtitle {
+  padding-left: 0.32em;
+  font-size: 0.4em;
+  line-height: 1.3;
+  letter-spacing: 0.32em;
+  color: #e8bd78;
+  text-shadow: 0 2px 4px #000;
 }

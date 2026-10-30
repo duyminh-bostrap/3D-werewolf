@@ -1,10 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { PlayerState } from '../game/rules';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
 
 interface WebRTCVoiceManagerProps {
   wsRef: React.MutableRefObject<WebSocket | null>;
   localPlayerId: string;
   players: PlayerState[];
+  phase: GamePhase;
+  localRole: RoleId;
+  localIsAlive: boolean;
   isMuted: boolean;
   isSpeaking: boolean;
   onVoiceStateChange: (isMuted: boolean, isSpeaking: boolean) => void;
@@ -18,6 +21,9 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   wsRef,
   localPlayerId,
   players,
+  phase,
+  localRole,
+  localIsAlive,
   isMuted,
   isSpeaking,
   onVoiceStateChange,
@@ -31,80 +37,154 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   const analyserIntervalRef = useRef<number | null>(null);
   const latestPlayersRef = useRef<PlayerState[]>(players);
 
+  // Voice privacy: at night only the wolf pack hears each other; dead players are cut off entirely.
+  const allowedPeerIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!localIsAlive) return ids;
+
+    const wolvesOnly = phase === 'night';
+    const localIsWolf = isWolfPackRole(localRole);
+
+    for (const p of players) {
+      if (p.id === localPlayerId || !p.isAlive) continue;
+      if (wolvesOnly && !(localIsWolf && isWolfPackRole(p.role))) continue;
+      ids.add(p.id);
+    }
+    return ids;
+  }, [players, localPlayerId, phase, localRole, localIsAlive]);
+
+  const allowedPeerKey = useMemo(
+    () => Array.from(allowedPeerIds).sort().join('|'),
+    [allowedPeerIds]
+  );
+
+  const isWolfNight = phase === 'night' && localIsAlive && isWolfPackRole(localRole);
+
   useEffect(() => {
     latestPlayersRef.current = players;
-    // Update spatial 3D distance attenuation on remote audio elements
-    if (!spatialAudioEnabled) return;
-    const me = players.find((p) => p.id === localPlayerId);
-    if (!me) return;
-
+    // Update spatial 3D distance attenuation on remote audio elements.
+    // Wolf night channel is non-spatial (you hear your pack clearly wherever you sit).
     for (const [peerId, audioEl] of remoteAudioElsRef.current.entries()) {
+      if (!spatialAudioEnabled) {
+        audioEl.volume = 1;
+        continue;
+      }
+      if (isWolfNight) {
+        audioEl.volume = 1;
+        continue;
+      }
+      const me = players.find((p) => p.id === localPlayerId);
       const peer = players.find((p) => p.id === peerId);
-      if (peer) {
+      if (me && peer) {
         const dist = Math.hypot(peer.x - me.x, peer.z - me.z);
-        const vol = Math.max(0.15, Math.min(1, 1 - dist / 32));
-        audioEl.volume = vol;
+        audioEl.volume = Math.max(0.15, Math.min(1, 1 - dist / 32));
       }
     }
-  }, [players, localPlayerId, spatialAudioEnabled]);
+  }, [players, localPlayerId, spatialAudioEnabled, isWolfNight]);
 
-  const createPeerConnection = (peerId: string, initiator: boolean) => {
-    if (peersRef.current.has(peerId)) {
-      return peersRef.current.get(peerId)!;
+  const closePeer = useCallback((peerId: string) => {
+    const pc = peersRef.current.get(peerId);
+    if (pc) {
+      try {
+        pc.close();
+      } catch {
+        // Ignore already-closed peer connections
+      }
+      peersRef.current.delete(peerId);
     }
-
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    peersRef.current.set(peerId, pc);
-
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
+    const audio = remoteAudioElsRef.current.get(peerId);
+    if (audio) {
+      audio.pause();
+      audio.srcObject = null;
+      remoteAudioElsRef.current.delete(peerId);
     }
+  }, []);
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: 'webrtc:signal',
-            targetId: peerId,
-            signal: { type: 'ice', candidate: event.candidate },
+  const createPeerConnection = useCallback(
+    (peerId: string, initiator: boolean) => {
+      if (peersRef.current.has(peerId)) {
+        return peersRef.current.get(peerId)!;
+      }
+
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peersRef.current.set(peerId, pc);
+
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          pc.addTrack(track, localStreamRef.current!);
+        });
+      }
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(
+            JSON.stringify({
+              type: 'webrtc:signal',
+              targetId: peerId,
+              signal: { type: 'ice', candidate: event.candidate },
+            })
+          );
+        }
+      };
+
+      pc.ontrack = (event) => {
+        const [remoteStream] = event.streams;
+        if (!remoteStream) return;
+        let audio = remoteAudioElsRef.current.get(peerId);
+        if (!audio) {
+          audio = new Audio();
+          audio.autoplay = true;
+          remoteAudioElsRef.current.set(peerId, audio);
+        }
+        audio.srcObject = remoteStream;
+        void audio.play().catch(() => {});
+      };
+
+      if (initiator) {
+        pc.createOffer()
+          .then((offer) => pc.setLocalDescription(offer))
+          .then(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN && pc.localDescription) {
+              wsRef.current.send(
+                JSON.stringify({
+                  type: 'webrtc:signal',
+                  targetId: peerId,
+                  signal: { type: 'sdp', sdp: pc.localDescription },
+                })
+              );
+            }
           })
-        );
+          .catch(() => {});
       }
-    };
 
-    pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (!remoteStream) return;
-      let audio = remoteAudioElsRef.current.get(peerId);
-      if (!audio) {
-        audio = new Audio();
-        audio.autoplay = true;
-        remoteAudioElsRef.current.set(peerId, audio);
-      }
-      audio.srcObject = remoteStream;
-    };
+      return pc;
+    },
+    [wsRef]
+  );
 
-    if (initiator) {
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN && pc.localDescription) {
-            wsRef.current.send(
-              JSON.stringify({
-                type: 'webrtc:signal',
-                targetId: peerId,
-                signal: { type: 'sdp', sdp: pc.localDescription },
-              })
-            );
-          }
-        })
-        .catch(() => {});
+  // Keep the peer mesh in sync with the current voice channel (who is allowed to hear whom)
+  useEffect(() => {
+    const allowed = new Set(allowedPeerIds);
+
+    for (const peerId of Array.from(peersRef.current.keys())) {
+      if (!allowed.has(peerId)) closePeer(peerId);
     }
 
-    return pc;
-  };
+    for (const peerId of allowed) {
+      if (peersRef.current.has(peerId)) continue;
+      // Deterministic initiator avoids duplicate SDP offers (glare) from both sides
+      createPeerConnection(peerId, localPlayerId < peerId);
+    }
+  }, [allowedPeerKey, allowedPeerIds, closePeer, createPeerConnection, localPlayerId]);
+
+  // Dead players keep their microphone hard-muted
+  useEffect(() => {
+    if (localIsAlive) return;
+    localStreamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = false;
+    });
+    if (!isMuted) onVoiceStateChange(true, false);
+  }, [localIsAlive, isMuted, onVoiceStateChange]);
 
   // Expose WebRTC signaling handler on window so App WebSocket listener can route signals cleanly
   useEffect(() => {
@@ -113,20 +193,15 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       if (!detail) return;
 
       if (detail.type === 'webrtc:peer-joined') {
-        createPeerConnection(detail.peerId, true);
+        // Connection is created by the allowed-peer effect once room state arrives
+        if (allowedPeerIds.has(detail.peerId)) {
+          createPeerConnection(detail.peerId, localPlayerId < detail.peerId);
+        }
       } else if (detail.type === 'webrtc:peer-left') {
-        const pc = peersRef.current.get(detail.peerId);
-        if (pc) {
-          pc.close();
-          peersRef.current.delete(detail.peerId);
-        }
-        const audio = remoteAudioElsRef.current.get(detail.peerId);
-        if (audio) {
-          audio.srcObject = null;
-          remoteAudioElsRef.current.delete(detail.peerId);
-        }
+        closePeer(detail.peerId);
       } else if (detail.type === 'webrtc:signal') {
         const { fromId, signal } = detail;
+        if (!allowedPeerIds.has(fromId)) return;
         const pc = createPeerConnection(fromId, false);
         try {
           if (signal.type === 'sdp') {
@@ -155,17 +230,20 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     return () => {
       window.removeEventListener('gothic-webrtc-event', handleSignalEvent);
     };
-  }, []);
+  }, [allowedPeerIds, createPeerConnection, closePeer, localPlayerId, wsRef]);
 
   useEffect(() => {
     return () => {
       if (analyserIntervalRef.current) clearInterval(analyserIntervalRef.current);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       peersRef.current.forEach((pc) => pc.close());
+      peersRef.current.clear();
     };
   }, []);
 
-  const toggleMicrophone = async () => {
+  const toggleMicrophone = useCallback(async () => {
+    if (!localIsAlive) return;
+
     if (micPermissionState === 'idle') {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -196,7 +274,9 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
         }
 
         // Set up voice activity detection (VAD)
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           const audioCtx = new AudioCtx();
           const source = audioCtx.createMediaStreamSource(stream);
@@ -234,7 +314,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       const nextMuted = !isMuted;
       onVoiceStateChange(nextMuted, !nextMuted);
     }
-  };
+  }, [micPermissionState, isMuted, localIsAlive, onVoiceStateChange, wsRef]);
 
   useEffect(() => {
     const onExternalToggle = () => {
@@ -244,8 +324,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     return () => {
       window.removeEventListener('gothic-toggle-mic', onExternalToggle);
     };
-  }, [micPermissionState, isMuted]);
+  }, [toggleMicrophone]);
 
   return null;
 };
-

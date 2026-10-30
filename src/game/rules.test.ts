@@ -438,25 +438,29 @@ test('60s Night action progress, 180s Day blank vote nomination, and 30s Gallows
   assert.equal(executedVerdict.jesterWon, true);
 });
 
-test('validateLobbyStart blocks start when missing players or non-host players are unready', () => {
-  const players6 = createMockPlayers(6);
-  // Room target is 8 players, only 6 present -> cannot start
-  const notFull = validateLobbyStart(players6, 8);
-  assert.equal(notFull.canStart, false);
-  assert.equal(notFull.currentCount, 6);
-  assert.equal(notFull.requiredCount, 8);
-
-  // Room has 8 players, but player 2 (non-host) is not ready -> cannot start
-  const players8 = createMockPlayers(8);
-  players8[1].isReady = false;
-  const unready = validateLobbyStart(players8, 8);
-  assert.equal(unready.canStart, false);
-  assert.equal(unready.readyCount, 7);
-
-  // Player 2 presses ready -> host can start
-  players8[1].isReady = true;
-  const readyToStart = validateLobbyStart(players8, 8);
-  assert.equal(readyToStart.canStart, true);
-  assert.equal(readyToStart.readyCount, 8);
+test('lobby starts only with 5 to 15 players and everyone ready', () => {
+  const players = createMockPlayers(8);
+  assert.equal(validateLobbyStart(players.slice(0, 4), 8).canStart, false);
+  assert.equal(validateLobbyStart(players.slice(0, 5), 8).canStart, true);
+  players[1].isReady = false;
+  assert.equal(validateLobbyStart(players, 8).canStart, false);
+  players[1].isReady = true;
+  assert.equal(validateLobbyStart(players, 8).canStart, true);
+  const tooMany = Array.from({ length: 16 }, (_, i) => ({ ...players[0], id: `p${i}` }));
+  assert.equal(validateLobbyStart(tooMany, 15).canStart, false);
 });
 
+
+test('night progress waits for every player with the same role to confirm', () => {
+  const players = createMockPlayers(5).slice(0, 2);
+  players[0].role = 'seer';
+  players[1].role = 'seer';
+  const progress = computeNightActionProgress(players, {
+    wolfVotes: {}, bodyguardTargetId: null, seerTargetId: players[1].id,
+    witchSaveUsed: false, witchPoisonTargetId: null, hunterRevengeTargetId: null,
+    cupidLovers: null, actedPlayerIds: [players[0].id],
+  }, 1, { hasHealPotion: true, hasPoisonPotion: true }, false);
+  assert.equal(progress.completedCount, 1);
+  assert.equal(progress.requiredCount, 2);
+  assert.equal(progress.allCompleted, false);
+});

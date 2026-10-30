@@ -41,15 +41,6 @@ const LANTERN_COLORS = [
   { hex: '#38bdf8', name: 'Lam Ma Trơi' },
 ];
 
-const EPITHET_OPTIONS = [
-  'Kẻ Gác Đêm',
-  'Nhà Chiêm Tinh',
-  'Y Sĩ Dịch Hạch',
-  'Thợ Săn Cổ Thụ',
-  'Lãnh Chúa Sương Mù',
-  'Kẻ Hành Hương',
-];
-
 export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> = ({
   playerName,
   appearance,
@@ -254,7 +245,6 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
               <div className="text-sm font-bold font-display text-white truncate">
                 {name || 'Lữ Khách Bí Ẩn'}
               </div>
-              <div className="text-[11px] text-[#d4af37]">{draft.epithet}</div>
             </div>
           </div>
 
@@ -270,21 +260,21 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setDraft({ ...preset })}
+                    onClick={() => setDraft({ ...preset, epithet: draft.epithet })}
                     className="px-2.5 py-2 rounded-xl bg-[#1b1626] hover:bg-[#261f36] border border-white/10 text-left text-xs text-slate-200 transition-colors cursor-pointer flex items-center gap-2"
                   >
                     <span
                       className="w-3.5 h-3.5 rounded-full shrink-0 border border-white/30"
                       style={{ backgroundColor: preset.cloakColor }}
                     />
-                    <span className="truncate">{preset.epithet}</span>
+                    <span className="truncate">{HEADGEAR_OPTIONS.find((item) => item.id === preset.headgear)?.label ?? `Trang phục ${idx + 1}`}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Name & Epithet */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Name */}
+            <div>
               <div>
                 <label htmlFor="custom-player-name" className="block text-xs font-medium text-slate-300 mb-1">
                   Tên Nhân Vật
@@ -304,23 +294,6 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
                 {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
               </div>
 
-              <div>
-                <label htmlFor="custom-epithet" className="block text-xs font-medium text-slate-300 mb-1">
-                  Danh Hiệu Cổ Thôn
-                </label>
-                <select
-                  id="custom-epithet"
-                  value={draft.epithet}
-                  onChange={(e) => setDraft({ ...draft, epithet: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-[#09080d] border border-white/15 text-xs sm:text-sm text-white focus:outline-none focus:border-[#d4af37]"
-                >
-                  {EPITHET_OPTIONS.map((ep) => (
-                    <option key={ep} value={ep}>
-                      {ep}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             {/* Headgear / Mask Selector */}

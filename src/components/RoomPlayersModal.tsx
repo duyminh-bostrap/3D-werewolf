@@ -193,7 +193,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    disabled={players.length <= MIN_ROOM_PLAYERS || botCount === 0}
+                    disabled={botCount === 0}
                     onClick={onRemoveBot}
                     title="Bớt AI"
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-950/70 hover:bg-red-900 disabled:opacity-40 border border-red-500/40 text-xs font-semibold text-red-200 cursor-pointer"
@@ -203,7 +203,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    disabled={players.length >= MAX_ROOM_PLAYERS}
+                    disabled={players.length >= Math.min(MAX_ROOM_PLAYERS, targetSlots)}
                     onClick={onAddBot}
                     title="Thêm AI"
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 disabled:opacity-40 border border-emerald-500/40 text-xs font-semibold text-emerald-200 cursor-pointer"

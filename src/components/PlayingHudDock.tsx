@@ -1,31 +1,27 @@
+import { saveFriend } from '../lib/friendsStore';
 import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
-  Sparkles,
   Users,
-  Palette,
   Layers,
+  Pointer,
+  Mountain,
   Eye,
   Play,
-  RotateCcw,
   MessageSquare,
   Settings,
-  Sun,
-  Moon,
-  Sunset,
   Mic,
   MicOff,
   Crosshair,
   Send,
   Zap,
-  Minus,
-  Plus,
   Clock,
   Skull,
   ShieldCheck,
   Scale,
   Heart,
+  HeartHandshake,
   UserPlus,
   UserCheck,
   Check,
@@ -34,8 +30,6 @@ import {
   X,
 } from 'lucide-react';
 import {
-  MAX_ROOM_PLAYERS,
-  MIN_ROOM_PLAYERS,
   QUICK_CHAT_PRESETS,
   ROLE_CATALOG,
   canBodyguardProtect,
@@ -48,9 +42,10 @@ import {
   type WitchPotionState,
 } from '../game/rules';
 import type { ChatMessage } from '../../server';
-import type { LightingStageMode } from '../three/GothicVillageScene';
+import type { CameraPreset } from '../three/GothicVillageScene';
 import { WebRTCVoiceManager } from './WebRTCVoiceManager';
 import { soundEngine } from '../audio/soundEngine';
+import { renderRoleWoodcutSvg } from './RoleTarotModal';
 
 interface PlayingHudDockProps {
   wsRef: React.MutableRefObject<WebSocket | null>;
@@ -72,36 +67,42 @@ interface PlayingHudDockProps {
   nightCompletedCount?: number;
   nightRequiredCount?: number;
   allNightActionsSubmitted?: boolean;
+  myNightActionRequired?: boolean;
+  myNightActionSubmitted?: boolean;
   logs: string[];
   messages: ChatMessage[];
   messageCount: number;
-  lightingOverride: LightingStageMode;
   isWerewolfNightVision: boolean;
   isHudCollapsed: boolean;
+  cameraPreset: CameraPreset;
+  onPointFirstPerson: () => void;
+  onToggleOverview: () => void;
   onToggleHudCollapse: () => void;
-  onCycleLightingOverride: () => void;
   onOpenChatDrawer: () => void;
   onOpenSettings: () => void;
-  onOpenCustomizer: () => void;
   onOpenRoleCard: () => void;
   onOpenRoomPlayers: () => void;
   onOpenRoleConfig: () => void;
-  onSetPlayerCount: (targetCount: number, autoBalanceRoles: boolean) => void;
-  onAddBot?: () => void;
+  onOpenFriends: () => void;
   onSelectTarget: (targetId: string | null) => void;
   onInteractPlayer?: (targetId: string, action: SocialInteractionType) => void;
   onToggleReady?: () => void;
   onToggleWolfVision: () => void;
   onStartGame: () => void;
   onSubmitNightAction: (actionType: string, targetId?: string | null, lovers?: [string, string]) => void;
-  onResolveNight: () => void;
   onSubmitDayVote: (targetId: string) => void;
-  onResolveDayVote: () => void;
   onSubmitTrialVote: (choice: 'kill' | 'save') => void;
   onResolveTrial: () => void;
   onSendChat: (text: string) => void;
   onVoiceStateChange: (isMuted: boolean, isSpeaking: boolean) => void;
 }
+
+const CAMERA_MODE_LABELS: Record<CameraPreset, { short: string; full: string }> = {
+  follow: { short: '3rd', full: 'Góc Nhìn Thứ 3 (Theo Bước)' },
+  first: { short: '1st', full: 'Góc Nhìn Thứ Nhất' },
+  bonfire: { short: 'Lửa', full: 'Cận Cảnh Lửa Trại' },
+  overview: { short: 'Toàn', full: 'Toàn Cảnh Làng Cổ' },
+};
 
 function formatCountdown(secondsLeft: number): string {
   const clamped = Math.max(0, Math.floor(secondsLeft));
@@ -130,36 +131,34 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   nightCompletedCount = 0,
   nightRequiredCount = 0,
   allNightActionsSubmitted = false,
+  myNightActionRequired = false,
+  myNightActionSubmitted = false,
   messageCount,
-  lightingOverride,
   isWerewolfNightVision,
   isHudCollapsed,
+  cameraPreset,
+  onPointFirstPerson,
+  onToggleOverview,
   onToggleHudCollapse,
-  onCycleLightingOverride,
   onOpenChatDrawer,
   onOpenSettings,
-  onOpenCustomizer,
   onOpenRoleCard,
   onOpenRoomPlayers,
   onOpenRoleConfig,
-  onSetPlayerCount,
-  onAddBot,
+  onOpenFriends,
   onSelectTarget,
   onInteractPlayer,
   onToggleReady,
   onToggleWolfVision,
   onStartGame,
   onSubmitNightAction,
-  onResolveNight,
   onSubmitDayVote,
-  onResolveDayVote,
   onSubmitTrialVote,
   onResolveTrial,
   onSendChat,
   onVoiceStateChange,
 }) => {
   const [cupidFirstId, setCupidFirstId] = useState<string | null>(null);
-  const [actionSubmitted, setActionSubmitted] = useState(false);
   const [littleGirlClue, setLittleGirlClue] = useState<string | null>(null);
   const [quickChatInput, setQuickChatInput] = useState('');
   const [showQuickPresets, setShowQuickPresets] = useState(false);
@@ -169,7 +168,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   const [stoneCounts, setStoneCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    setActionSubmitted(false);
+
     setLittleGirlClue(null);
     setCupidFirstId(null);
   }, [phase, dayNumber]);
@@ -204,19 +203,6 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   const isLobby = phase === 'lobby';
   const lobbyValidation = validateLobbyStart(players, maxPlayers);
 
-  const effectiveLightStage: 'dusk' | 'night' | 'day' =
-    lightingOverride !== 'auto'
-      ? lightingOverride
-      : phase === 'night' || phase === 'role_reveal'
-      ? 'night'
-      : phase === 'day_announcement' ||
-        phase === 'day_discussion' ||
-        phase === 'day_voting' ||
-        phase === 'day_trial' ||
-        phase === 'hunter_revenge'
-      ? 'day'
-      : 'dusk';
-
   const shortPhaseTitle =
     phase === 'lobby'
       ? `#${roomCode}`
@@ -237,7 +223,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       } else if (cupidFirstId !== selected3DPlayer.id) {
         onSubmitNightAction('cupid', null, [cupidFirstId, selected3DPlayer.id]);
         setCupidFirstId(null);
-        setActionSubmitted(true);
+
       }
       return;
     }
@@ -255,7 +241,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       selected3DPlayer.id !== localPlayer.id
     ) {
       onSubmitNightAction('white_wolf_kill', selected3DPlayer.id);
-      setActionSubmitted(true);
+
       soundEngine.playHorrorSlash();
       return;
     }
@@ -263,20 +249,25 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
     if (localPlayer.role === 'witch') {
       if (witchState.hasPoisonPotion) {
         onSubmitNightAction('poison', selected3DPlayer.id);
-        setActionSubmitted(true);
+
       }
       return;
     }
 
     onSubmitNightAction(localPlayer.role, selected3DPlayer.id);
-    setActionSubmitted(true);
+
     if (isWolfPackRole(localPlayer.role)) {
       soundEngine.playHorrorSlash();
     }
   };
 
+  const topGroup = 'pointer-events-auto flex h-11 shrink-0 items-center gap-1 rounded-xl border border-[#d4af37]/35 bg-[#110d19]/95 p-1 shadow-lg';
+  const topButton = 'flex h-9 w-8 sm:w-9 shrink-0 items-center justify-center rounded-lg border border-[#d4af37]/20 bg-[#211a2e] text-[#e8cd82] transition-colors hover:bg-[#342640] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200';
+
   const triggerSocialAction = (target: PlayerState, action: SocialInteractionType) => {
+    if (target.id === localPlayer.id) return;
     if (action === 'friend') {
+      void saveFriend({ playerId: target.id, name: target.name, roomCode, note: '' });
       soundEngine.playHeartChime();
       setFriendIds((prev) => {
         const next = new Set(prev);
@@ -306,6 +297,9 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
         wsRef={wsRef}
         localPlayerId={localPlayer.id}
         players={players}
+        phase={phase}
+        localRole={localPlayer.role}
+        localIsAlive={localPlayer.isAlive}
         isMuted={localPlayer.isMuted}
         isSpeaking={localPlayer.isSpeaking}
         onVoiceStateChange={onVoiceStateChange}
@@ -314,56 +308,57 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       {/* Top Perimeter Area: Top Bar + Non-Overlapping Selected 3D Character Social Bar */}
       <div className="w-full flex flex-col items-center gap-1.5">
         <div className="w-full flex items-center justify-between gap-1">
-          {/* Zone 1 (Top-Left): Settings, Customizer, Lighting */}
-          <div className="pointer-events-auto rounded-xl sm:rounded-2xl bg-[#110d19]/92 border border-[#d4af37]/35 p-1 shadow-xl flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              data-testid="open-settings-btn"
-              aria-label="Cài đặt"
-              title="Cài Đặt"
-              onClick={onOpenSettings}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#1a1426] hover:bg-[#271e38] border border-white/10 flex items-center justify-center text-[#d4af37] cursor-pointer transition-colors"
-            >
-              <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            </button>
-
-            <button
-              type="button"
-              data-testid="open-customizer-btn"
-              aria-label="Sửa nhân vật 3D"
-              title="Trang Phục 3D"
-              onClick={onOpenCustomizer}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#1a1426] hover:bg-[#271e38] border border-violet-400/35 flex items-center justify-center text-violet-300 cursor-pointer transition-colors"
-            >
-              <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            </button>
-
-            <button
-              type="button"
-              data-testid="cycle-lighting-stage-btn"
-              onClick={onCycleLightingOverride}
-              aria-label="Đổi ánh sáng"
-              title="Ánh Sáng"
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
-                effectiveLightStage === 'day'
-                  ? 'bg-sky-950/90 border-sky-400/50 text-amber-300'
-                  : effectiveLightStage === 'night'
-                  ? 'bg-red-950/90 border-red-500/50 text-red-400'
-                  : 'bg-amber-950/80 border-amber-400/50 text-amber-400'
-              }`}
-            >
-              {effectiveLightStage === 'day' ? (
-                <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              ) : effectiveLightStage === 'night' ? (
-                <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              ) : (
-                <Sunset className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              )}
+          <div className={topGroup}>
+            <button type="button" onClick={onOpenRoleConfig} aria-label="Bộ bài Role" title="Bộ bài Role" data-testid="open-roles-modal-btn" className={topButton}>
+              <Layers className="w-4 h-4" />
             </button>
           </div>
 
           {/* Zone 2 (Top-Center): Phase, Countdown & Secret Role Icon */}
-          <div className="pointer-events-auto h-9 sm:h-10 rounded-xl sm:rounded-2xl bg-[#110d19]/92 border border-[#d4af37]/35 px-2 sm:px-3 shadow-xl flex items-center gap-1.5 shrink-0">
+          <div className={`pointer-events-auto flex items-center gap-1.5 shrink-0 ${isLobby ? '' : 'h-11 rounded-xl bg-[#110d19]/95 border border-[#d4af37]/35 px-2 shadow-lg'}`}>
+            {isLobby ? (
+              localPlayer.isHost ? (
+                <button
+                  type="button"
+                  data-testid="start-night-ritual-btn"
+                  disabled={!lobbyValidation.canStart}
+                  aria-label="Bắt đầu"
+                  title={lobbyValidation.reasonVi}
+                  onClick={() => {
+                    if (!lobbyValidation.canStart) return;
+
+                    soundEngine.playChurchBell();
+                    onStartGame();
+                  }}
+                  className={`min-h-11 px-3 sm:px-4 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold tracking-wide shadow-lg transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 ${
+                    lobbyValidation.canStart
+                      ? 'bg-gradient-to-b from-[#a62231] to-[#68121e] border-[#e5b95d] text-[#fff1c8] hover:from-[#bd3040] hover:to-[#811927] cursor-pointer active:scale-95'
+                      : 'bg-[#241c2b] border-[#71614e] text-[#b4a7a1] cursor-not-allowed'
+                  }`}
+                >
+                  <span className="w-6 h-6 rounded-md bg-black/20 border border-white/15 flex items-center justify-center"><Play className="w-3 h-3 fill-current shrink-0" /></span>
+                  <span className="whitespace-nowrap">Bắt đầu</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="toggle-ready-btn"
+                  aria-label="Sẵn sàng"
+                  aria-pressed={localPlayer.isReady}
+                  title={localPlayer.isReady ? 'Đã sẵn sàng' : 'Bấm Sẵn sàng'}
+                  onClick={onToggleReady}
+                  className={`min-h-11 px-3 sm:px-4 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold tracking-wide shadow-lg cursor-pointer transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200 ${
+                    localPlayer.isReady
+                      ? 'bg-gradient-to-b from-[#24644d] to-[#143c31] border-emerald-400/70 text-emerald-50'
+                      : 'bg-gradient-to-b from-[#a62231] to-[#68121e] border-[#e5b95d] text-[#fff1c8] hover:from-[#bd3040]'
+                  }`}
+                >
+                  <span className="w-6 h-6 rounded-md bg-black/20 border border-white/15 flex items-center justify-center"><Check className="w-3.5 h-3.5 shrink-0" /></span>
+                  <span className="whitespace-nowrap">{localPlayer.isReady ? 'Đã sẵn sàng' : 'Sẵn sàng'}</span>
+                </button>
+              )
+            ) : (
+              <>
             <span
               className={`w-2 h-2 rounded-full shrink-0 ${
                 phase === 'night' || phase === 'role_reveal'
@@ -382,7 +377,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             {secondsLeft !== null && !isLobby && (
               <span
                 data-testid="phase-countdown-badge"
-                className={`px-1.5 py-0.5 rounded-md font-mono-tabular text-[10px] sm:text-[11px] font-bold flex items-center gap-1 border ${
+                className={`px-1.5 py-1 rounded-lg font-mono-tabular text-[10px] sm:text-[11px] font-bold flex items-center gap-1 border ${
                   secondsLeft <= 10
                     ? 'bg-red-950/90 border-red-500 text-red-200 animate-pulse'
                     : 'bg-black/45 border-white/15 text-[#d4af37]'
@@ -393,48 +388,23 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               </span>
             )}
 
-            {!isLobby && (
-              <button
-                type="button"
-                onClick={onOpenRoleCard}
-                title={roleMeta.nameVi}
-                aria-label="Xem bài Role"
-                className="h-6 px-1.5 rounded-lg bg-[#1d1628] hover:bg-[#2a203b] border border-white/15 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
-                style={{ color: roleMeta.accentColor }}
-              >
-                <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline whitespace-nowrap">{roleMeta.nameVi}</span>
-              </button>
+              </>
             )}
           </div>
 
-          {/* Zone 3 (Top-Right): Room Players (- / + ONLY in Lobby for Host) + Role Deck + Host Start / Player Ready */}
-          <div className="pointer-events-auto rounded-xl sm:rounded-2xl bg-[#110d19]/92 border border-[#d4af37]/35 p-1 shadow-xl flex items-center gap-1 shrink-0">
-            {/* 3A. Room Players Capsule (- / + locked once game starts!) */}
-            <div className="h-7 sm:h-8 rounded-lg bg-[#1a1426] border border-emerald-500/40 flex items-center overflow-hidden shrink-0">
-              {isLobby && localPlayer.isHost && (
-                <button
-                  type="button"
-                  data-testid="hud-decrease-players-btn"
-                  disabled={maxPlayers <= MIN_ROOM_PLAYERS}
-                  aria-label="Giảm người"
-                  title="Giảm số lượng người"
-                  onClick={() => onSetPlayerCount(maxPlayers - 1, true)}
-                  className="w-5 sm:w-6 h-full hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-200 hover:text-white cursor-pointer"
-                >
-                  <Minus className="w-3 h-3 shrink-0" />
-                </button>
-              )}
-
+          {/* Zone 3 (Top-Right): Room Players + Role Deck + Room Actions */}
+          <div className={topGroup}>
+            {/* 3A. Room Players Capsule */}
+            <div className="flex h-9 shrink-0 items-center overflow-hidden rounded-lg border border-[#d4af37]/20 bg-[#211a2e]">
               <button
                 type="button"
                 data-testid="open-players-modal-btn"
                 aria-label="Danh sách người chơi"
                 title={isLobby ? lobbyValidation.reasonVi : `${alivePlayers.length}/${players.length}`}
                 onClick={onOpenRoomPlayers}
-                className="h-full px-1.5 hover:bg-[#271e38] border-x border-white/10 text-emerald-300 flex items-center gap-1 cursor-pointer"
+                className="flex h-full items-center gap-1 px-2 text-[#e8cd82] hover:bg-[#342640] focus-visible:outline-2 focus-visible:outline-amber-200"
               >
-                <Users className="w-3.5 h-3.5 shrink-0" />
+                <Users className="w-4 h-4 shrink-0" />
                 <span
                   data-testid="hud-player-count-value"
                   className="text-[11px] font-mono-tabular font-bold text-[#d4af37]"
@@ -445,117 +415,40 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                 </span>
               </button>
 
-              {isLobby && localPlayer.isHost && (
-                <button
-                  type="button"
-                  data-testid="hud-increase-players-btn"
-                  disabled={maxPlayers >= MAX_ROOM_PLAYERS}
-                  aria-label="Tăng người"
-                  title="Tăng số lượng người"
-                  onClick={() => onSetPlayerCount(maxPlayers + 1, true)}
-                  className="w-5 sm:w-6 h-full hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-200 hover:text-white cursor-pointer"
-                >
-                  <Plus className="w-3 h-3 shrink-0" />
-                </button>
-              )}
             </div>
 
-            {/* Quick +Bot Fill Button when Lobby has fewer players than maxPlayers */}
-            {isLobby && localPlayer.isHost && players.length < maxPlayers && onAddBot && (
-              <button
-                type="button"
-                data-testid="hud-add-bot-btn"
-                onClick={onAddBot}
-                title="Thêm Bot cho đủ người"
-                aria-label="Thêm Bot"
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-950/90 hover:bg-emerald-800 border border-emerald-400/50 text-emerald-300 flex items-center justify-center cursor-pointer shrink-0"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-              </button>
-            )}
-
-            {/* 3B. Role Deck Button */}
-            <button
-              type="button"
-              data-testid="open-roles-modal-btn"
-              aria-label="Bộ bài Role"
-              title="Bộ Bài Role"
-              onClick={onOpenRoleConfig}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#1a1426] hover:bg-[#271e38] border border-[#d4af37]/40 text-[#d4af37] flex items-center justify-center cursor-pointer shrink-0"
-            >
-              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <button type="button" data-testid="invite-friends-btn" onClick={onOpenFriends} aria-label="Mời bạn bè" title="Mời bạn bè" className={topButton}>
+              <UserPlus className="w-4 h-4" />
             </button>
 
-            {/* 3C. Primary Action:
-                - In Lobby: Host sees Start (<Play />, disabled if not full or not all ready);
-                            Non-Host sees Ready (<Check />, toggles isReady).
-                - In Game: Host sees Restart (<RotateCcw />). */}
-            {isLobby ? (
-              localPlayer.isHost ? (
-                <button
-                  type="button"
-                  data-testid="start-night-ritual-btn"
-                  disabled={!lobbyValidation.canStart}
-                  aria-label="Bắt đầu"
-                  title={lobbyValidation.reasonVi}
-                  onClick={() => {
-                    if (!lobbyValidation.canStart) return;
-                    setActionSubmitted(false);
-                    soundEngine.playChurchBell();
-                    onStartGame();
-                  }}
-                  className={`h-7 sm:h-8 px-2 rounded-lg flex items-center justify-center gap-1 shadow-md transition-all shrink-0 ${
-                    lobbyValidation.canStart
-                      ? 'bg-[#9e1b24] hover:bg-[#b91c1c] border border-[#f59e0b]/60 text-amber-200 cursor-pointer active:scale-95'
-                      : 'bg-slate-800/80 border border-white/10 text-slate-500 opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <Play className="w-3.5 h-3.5 fill-current shrink-0" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="toggle-ready-btn"
-                  aria-label="Sẵn sàng"
-                  title={localPlayer.isReady ? 'Đã sẵn sàng' : 'Bấm Sẵn sàng'}
-                  onClick={onToggleReady}
-                  className={`h-7 sm:h-8 px-2 rounded-lg border flex items-center justify-center gap-1 text-[11px] font-bold shadow-md cursor-pointer transition-all shrink-0 ${
-                    localPlayer.isReady
-                      ? 'bg-emerald-600 border-emerald-300 text-white'
-                      : 'bg-amber-500 hover:bg-amber-400 border-amber-200 text-slate-950 animate-pulse'
-                  }`}
-                >
-                  <Check className="w-3.5 h-3.5 shrink-0" />
-                </button>
-              )
-            ) : (
-              localPlayer.isHost && (
-                <button
-                  type="button"
-                  data-testid="start-night-ritual-btn"
-                  aria-label="Ván mới"
-                  title="Ván mới"
-                  onClick={() => {
-                    setActionSubmitted(false);
-                    soundEngine.playChurchBell();
-                    onStartGame();
-                  }}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#241a32] hover:bg-[#332447] border border-amber-400/40 text-amber-300 flex items-center justify-center shadow-md cursor-pointer shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-              )
-            )}
+            <button type="button" data-testid="open-settings-btn" onClick={onOpenSettings} aria-label="Cài đặt" title="Cài đặt" className={topButton}>
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Floating Top-Center 3D Character Social Bar: Kết bạn, Thả tym, Ném đá (Zero overlap with bottom controls!) */}
-        {selected3DPlayer && (
+        {!isLobby && phase !== 'ended' && (
+          <button
+            type="button"
+            onClick={onOpenRoleCard}
+            aria-label={`Xem lá bài của bạn: ${roleMeta.nameVi}`}
+            title={roleMeta.nameVi}
+            data-testid="open-role-card-btn"
+            className="pointer-events-auto absolute left-3 top-[72px] flex h-[68px] w-14 items-center justify-center rounded-lg border border-[#d4af37]/60 bg-[#110d19]/95 p-1 shadow-lg transition-colors hover:bg-[#342640] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+          >
+            <span aria-hidden="true" className="block h-full w-full [&_svg]:!h-full [&_svg]:!w-full">
+              {renderRoleWoodcutSvg(localPlayer.role, roleMeta.accentColor)}
+            </span>
+          </button>
+        )}
+
+        {/* Selected player actions */}
+        {selected3DPlayer && selected3DPlayer.id !== localPlayer.id && (
           <div
             data-testid="3d-character-social-bar"
-            className="pointer-events-auto rounded-xl bg-[#14101f]/95 border border-[#d4af37]/45 px-2.5 py-1 shadow-2xl flex items-center gap-1.5"
+            className={`pointer-events-auto flex items-center gap-1 rounded-xl border border-[#d4af37]/35 bg-[#110d19]/95 p-1 shadow-lg ${!isLobby && phase !== 'ended' ? 'max-w-[calc(100%-72px)] self-end' : 'max-w-full'}`}
           >
-            <span className="text-[11px] font-bold text-amber-200 truncate max-w-[120px]">
+            <span className="min-w-0 max-w-[120px] truncate px-2 text-xs font-bold text-[#e8cd82]">
               #{selected3DPlayer.seatIndex + 1} {selected3DPlayer.name}
             </span>
 
@@ -566,11 +459,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               onClick={() => triggerSocialAction(selected3DPlayer, 'friend')}
               aria-label="Kết bạn"
               title={friendIds.has(selected3DPlayer.id) ? 'Đã kết bạn' : 'Kết bạn'}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center cursor-pointer transition-all ${
-                friendIds.has(selected3DPlayer.id)
-                  ? 'bg-emerald-700 border-emerald-300 text-white'
-                  : 'bg-[#1f182e] hover:bg-emerald-950 border-emerald-400/40 text-emerald-300'
-              }`}
+              className={`${topButton} ${friendIds.has(selected3DPlayer.id) ? '!border-emerald-400/60 !text-emerald-300' : ''}`}
             >
               {friendIds.has(selected3DPlayer.id) ? (
                 <UserCheck className="w-3.5 h-3.5" />
@@ -586,7 +475,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               onClick={() => triggerSocialAction(selected3DPlayer, 'heart')}
               aria-label="Thả tym"
               title="Thả tym"
-              className="h-7 px-2 rounded-lg bg-rose-950/90 hover:bg-rose-800 active:scale-90 border border-rose-400/50 text-rose-300 flex items-center gap-1 text-[10px] font-bold cursor-pointer transition-all"
+              className={`${topButton} gap-1 !text-rose-300`}
             >
               <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-400" />
               {(heartCounts[selected3DPlayer.id] || 0) > 0 && (
@@ -601,7 +490,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               onClick={() => triggerSocialAction(selected3DPlayer, 'stone')}
               aria-label="Ném đá"
               title="Ném đá"
-              className="h-7 px-2 rounded-lg bg-stone-800/90 hover:bg-stone-700 active:scale-90 border border-amber-400/40 text-amber-200 flex items-center gap-1 text-[10px] font-bold cursor-pointer transition-all"
+              className={`${topButton} gap-1`}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -621,9 +510,9 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               type="button"
               onClick={() => onSelectTarget(null)}
               aria-label="Đóng"
-              className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              className={`${topButton} !text-slate-400`}
             >
-              <X className="w-3 h-3" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -707,6 +596,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   </button>
                 )}
 
+                {myNightActionRequired && !myNightActionSubmitted && localPlayer.isAlive && (
+                  <>
                 {localPlayer.role === 'little_girl' && (
                   <button
                     type="button"
@@ -719,7 +610,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                       const suspect2 = others[0]?.name || '?';
                       setLittleGirlClue(`${suspect1}/${suspect2}`);
                       onSubmitNightAction('little_girl_peek');
-                      setActionSubmitted(true);
+
                     }}
                     title="Rình"
                     className="w-7 h-7 rounded-lg bg-sky-950/90 hover:bg-sky-900 text-sky-200 border border-sky-400/50 flex items-center justify-center cursor-pointer"
@@ -735,7 +626,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                       disabled={!witchState.hasHealPotion || !wolfTargetId}
                       onClick={() => {
                         onSubmitNightAction('heal');
-                        setActionSubmitted(true);
+
                       }}
                       title={`Cứu ${wolfVictimPlayer ? wolfVictimPlayer.name : ''}`}
                       className="h-7 px-2 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-40 text-[11px] font-bold text-emerald-100 border border-emerald-400/40 flex items-center gap-1 cursor-pointer"
@@ -777,7 +668,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                           onClick={() => {
                             if (selected3DPlayer) {
                               onSubmitNightAction('alpha_convert', selected3DPlayer.id);
-                              setActionSubmitted(true);
+
                             }
                           }}
                           title="Huyết Nguyền"
@@ -801,34 +692,17 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   )
                 )}
 
-                {actionSubmitted && (
-                  <span className="text-[11px] font-bold text-emerald-400">✓</span>
+                    <button type="button" data-testid="skip-night-action-btn" onClick={() => onSubmitNightAction('skip_night_role')} className="min-h-8 rounded-lg border border-white/20 bg-[#1c1626] px-2 text-[11px] font-semibold text-slate-200 hover:bg-[#271f36]">Bỏ qua</button>
+                  </>
                 )}
-
-                <button
-                  type="button"
-                  data-testid="resolve-night-btn"
-                  title="Qua Đêm"
-                  aria-label="Qua Đêm"
-                  onClick={() => {
-                    soundEngine.playChurchBell();
-                    onResolveNight();
-                    setActionSubmitted(false);
-                    setLittleGirlClue(null);
-                  }}
-                  className={`w-7 h-7 rounded-lg text-white font-bold shadow flex items-center justify-center cursor-pointer ${
-                    allNightActionsSubmitted
-                      ? 'bg-emerald-600 hover:bg-emerald-500 ring-1 ring-emerald-300'
-                      : 'bg-[#9e1b24] hover:bg-[#b91c1c]'
-                  }`}
-                >
-                  <FastForward className="w-3.5 h-3.5" />
-                </button>
+                {(myNightActionSubmitted || !myNightActionRequired) && (
+                  <span data-testid="night-waiting-status" role="status" className="text-[11px] font-semibold text-emerald-300">{myNightActionSubmitted ? 'Đã xác nhận · Chờ người chơi khác' : 'Chờ người chơi khác'}</span>
+                )}
               </div>
             )}
 
             {/* 2. Day Discussion & Voting (3m / 180s): Icon-First Vote + Blank Vote */}
-            {(phase === 'day_discussion' || phase === 'day_voting') && (
+            {localPlayer.isAlive && (phase === 'day_discussion' || phase === 'day_voting') && (
               <div
                 data-testid="3d-day-voting-bar"
                 className="rounded-xl bg-[#14101f]/95 border border-[#d4af37]/35 px-2 py-1 shadow-xl flex flex-wrap items-center justify-center gap-1.5"
@@ -884,24 +758,12 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   <span className="text-[11px] text-emerald-400 font-bold">✓</span>
                 )}
 
-                <button
-                  type="button"
-                  data-testid="resolve-day-vote-btn"
-                  title="Chốt phiếu"
-                  aria-label="Chốt phiếu"
-                  onClick={() => {
-                    soundEngine.playHeartbeat();
-                    onResolveDayVote();
-                  }}
-                  className="w-7 h-7 rounded-lg bg-[#9e1b24] hover:bg-[#b91c1c] text-white font-bold shadow flex items-center justify-center cursor-pointer"
-                >
-                  <FastForward className="w-3.5 h-3.5" />
-                </button>
+
               </div>
             )}
 
             {/* 3. Gallows Defense Trial Phase (30s): Icon-First Kill / Save Voting */}
-            {phase === 'day_trial' && (
+            {localPlayer.isAlive && phase === 'day_trial' && (
               <div
                 data-testid="3d-day-trial-bar"
                 className="rounded-xl bg-[#190f1c]/95 border-2 border-orange-500/60 px-2.5 py-1.5 shadow-2xl flex flex-wrap items-center justify-center gap-1.5"
@@ -980,7 +842,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
         {showQuickPresets && (
           <div
             data-testid="quick-chat-presets-bar"
-            className="max-w-[94vw] sm:max-w-lg overflow-x-auto no-scrollbar rounded-xl bg-[#110d19]/90 border border-[#d4af37]/30 px-2 py-1 shadow-xl flex items-center gap-1"
+            className="quick-chat-strip max-w-[94vw] sm:max-w-lg overflow-x-auto overscroll-x-contain rounded-xl bg-[#110d19]/95 border border-[#d4af37]/30 px-2 py-2 shadow-xl flex items-center gap-1.5"
           >
             {QUICK_CHAT_PRESETS.map((preset) => (
               <button
@@ -988,7 +850,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                 type="button"
                 data-testid="quick-chat-preset-btn"
                 onClick={() => onSendChat(preset)}
-                className="px-2 py-0.5 rounded-lg bg-[#1d162b] hover:bg-[#2d2142] active:scale-95 border border-[#d4af37]/30 text-[11px] font-medium text-amber-100 whitespace-nowrap cursor-pointer transition-all shrink-0"
+                className="min-h-9 px-3 rounded-lg bg-[#241b30] hover:bg-[#34263f] active:scale-95 border border-[#d4af37]/30 text-xs font-medium text-amber-100 whitespace-nowrap cursor-pointer transition-all shrink-0"
               >
                 {preset}
               </button>
@@ -1002,18 +864,39 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           <button
             type="button"
             data-testid="priority-mic-btn"
-            onClick={() => window.dispatchEvent(new CustomEvent('gothic-toggle-mic'))}
-            aria-label={localPlayer.isMuted ? 'Bật Mic Đàm Thoại' : 'Tắt Mic Đàm Thoại'}
-            title={localPlayer.isMuted ? 'Bật Mic Voice Chat' : 'Tắt Mic Voice Chat'}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-md cursor-pointer transition-all shrink-0 ${
-              !localPlayer.isMuted && localPlayer.isSpeaking
-                ? 'bg-emerald-600 border-emerald-300 text-white ring-2 ring-emerald-400/50'
-                : !localPlayer.isMuted
-                ? 'bg-emerald-900/90 border-emerald-400/60 text-emerald-100'
-                : 'bg-[#1e172a] hover:bg-[#2a203b] border-[#d4af37]/40 text-amber-200'
+            onClick={() => {
+              if (!localPlayer.isAlive) return;
+              window.dispatchEvent(new CustomEvent('gothic-toggle-mic'));
+            }}
+            disabled={!localPlayer.isAlive}
+            aria-label={
+              !localPlayer.isAlive
+                ? 'Đã ngã xuống - không thể nói'
+                : localPlayer.isMuted
+                ? 'Bật Mic Đàm Thoại'
+                : 'Tắt Mic Đàm Thoại'
+            }
+            title={
+              !localPlayer.isAlive
+                ? 'Người đã chết không thể nói'
+                : localPlayer.isMuted
+                ? 'Bật Mic Voice Chat'
+                : 'Tắt Mic Voice Chat'
+            }
+            className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-md shrink-0 ${
+              !localPlayer.isAlive
+                ? 'bg-[#161020] border-white/10 text-slate-600 opacity-60 cursor-not-allowed'
+                : 'cursor-pointer transition-all ' +
+                  (!localPlayer.isMuted && localPlayer.isSpeaking
+                    ? 'bg-emerald-600 border-emerald-300 text-white ring-2 ring-emerald-400/50'
+                    : !localPlayer.isMuted
+                    ? 'bg-emerald-900/90 border-emerald-400/60 text-emerald-100'
+                    : 'bg-[#1e172a] hover:bg-[#2a203b] border-[#d4af37]/40 text-amber-200')
             }`}
           >
-            {localPlayer.isMuted ? (
+            {!localPlayer.isAlive ? (
+              <Skull className="w-4 h-4 text-slate-500 shrink-0" />
+            ) : localPlayer.isMuted ? (
               <MicOff className="w-4 h-4 text-red-400 shrink-0" />
             ) : (
               <Mic className="w-4 h-4 text-emerald-300 shrink-0 animate-pulse" />
@@ -1053,8 +936,15 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               aria-label="Nhập tin nhắn nhanh"
               value={quickChatInput}
               onChange={(e) => setQuickChatInput(e.target.value)}
-              placeholder="Nhập tin nhắn..."
-              className="w-28 sm:w-44 bg-transparent text-xs text-white placeholder:text-slate-400 focus:outline-none"
+              placeholder={
+                phase === 'night' && isWolfPackRole(localPlayer.role)
+                  ? 'Nhắn riêng bầy sói...'
+                  : localPlayer.isAlive
+                  ? 'Nhập tin nhắn...'
+                  : 'Đã chết - không thể nói'
+              }
+              disabled={!localPlayer.isAlive}
+              className="w-28 sm:w-44 bg-transparent text-xs text-white placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"
@@ -1082,6 +972,43 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                 {messageCount}
               </span>
             )}
+          </button>
+
+          {/* Pointing is available during an active match. */}
+          {!isLobby && phase !== 'ended' && (
+          <button
+            type="button"
+            data-testid="cycle-camera-btn"
+            onClick={onPointFirstPerson}
+            aria-label={cameraPreset === 'first' ? 'Tắt chỉ tay · Góc nhìn thứ ba' : 'Bật chỉ tay · Góc nhìn thứ nhất'}
+            aria-pressed={cameraPreset === 'first'}
+            title={cameraPreset === 'first' ? 'Tắt chỉ tay · Góc nhìn thứ ba' : 'Bật chỉ tay · Góc nhìn thứ nhất'}
+            className={`fixed right-3 top-[42%] z-30 pointer-events-auto w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer transition-colors ${
+              cameraPreset === 'first'
+                ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100'
+                : cameraPreset === 'follow'
+                ? 'bg-[#1e172a] hover:bg-[#2a203b] border-white/15 text-amber-200'
+                : 'bg-[#2a1f3d] border-[#d4af37]/60 text-[#d4af37]'
+            }`}
+          >
+            <Pointer className="w-5 h-5 shrink-0" />
+          </button>
+          )}
+
+          <button type="button" data-testid="overview-camera-btn" onClick={onToggleOverview} aria-label={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} aria-pressed={cameraPreset === 'overview'} title={cameraPreset === 'overview' ? 'Trở lại góc nhìn nhân vật' : 'Xem toàn cảnh'} className={`fixed right-3 top-[calc(42%+52px)] z-30 w-11 h-11 rounded-full border flex items-center justify-center shadow-md cursor-pointer ${cameraPreset === 'overview' ? 'bg-[#9e1b24]/90 border-[#d4af37]/70 text-amber-100' : 'bg-[#1e172a] border-white/15 text-amber-200 hover:bg-[#2a203b]'}`}>
+            <Mountain className="w-5 h-5" />
+          </button>
+
+          {/* Button 5: Friends List (mời bạn bè vào phòng) */}
+          <button
+            type="button"
+            data-testid="open-friends-btn"
+            onClick={onOpenFriends}
+            aria-label="Danh sách bạn bè"
+            title="Danh Sách Bạn Bè (F)"
+            className="w-9 h-9 rounded-xl bg-[#1e172a] hover:bg-[#2a203b] border border-[#d4af37]/40 text-emerald-300 flex items-center justify-center shadow-md cursor-pointer transition-colors shrink-0"
+          >
+            <HeartHandshake className="w-4 h-4 shrink-0" />
           </button>
 
           {/* Minimal Icon-Only Collapse Toggle for Night/Day Action Pill */}

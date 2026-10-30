@@ -12,8 +12,8 @@ export interface MobileMovementInput {
   moveX: number; // -1..1
   moveZ: number; // -1..1
   jumpRequested: boolean;
-  eyeLookYaw: number; // directional target yaw offset while holding eye button (radians, 0 when released)
-  eyeLookPitch: number; // directional target pitch offset while holding eye button (0 when released)
+  lookDeltaYaw: number; // accumulated yaw drag since last frame (radians); consumed & reset by the 3D scene
+  lookDeltaPitch: number; // accumulated pitch drag since last frame; consumed & reset by the 3D scene
   isHoldingEye: boolean; // true only while finger/pointer is holding the eye button
 }
 
@@ -35,6 +35,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
 
   const eyeBaseRef = useRef<HTMLDivElement | null>(null);
   const eyePointerIdRef = useRef<number | null>(null);
+  const eyeLastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   const [knobPos, setKnobPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDraggingStick, setIsDraggingStick] = useState(false);
@@ -119,24 +120,29 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     }, 400);
   };
 
-  // Directional Free-Look Eye Control:
-  // Holding & dragging points the camera toward that exact direction (no continuous spinning).
-  // Releasing the finger immediately returns the camera smoothly to the default view (0, 0).
+  // Free-Look Camera Eye Control:
+  // Dragging rotates the camera like a touchpad — the angle is kept after release
+  // (no snapping back), so swiping left/right really turns the view with the character.
   const updateEyeFromPointer = (clientX: number, clientY: number) => {
     const base = eyeBaseRef.current;
     if (!base) return;
     const rect = base.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    const dx = clientX - centerX;
-    const dy = clientY - centerY;
 
-    const vec = computeJoystickVector(dx, dy, 18, 0.04);
+    // Knob follows the finger, clamped inside the pad, purely for visual feedback
+    const vec = computeJoystickVector(clientX - centerX, clientY - centerY, 18, 0.04);
     setEyeKnobPos({ x: vec.knobX, y: vec.knobY });
 
-    // Map finger deflection directly to target angle offset (not continuous velocity!)
-    inputRef.current.eyeLookYaw = -vec.normX * Math.PI * 0.85;
-    inputRef.current.eyeLookPitch = vec.normY * 2.4;
+    // Accumulate real drag deltas so repeated swipes keep rotating the camera
+    const last = eyeLastPointRef.current;
+    if (last) {
+      const dX = clientX - last.x;
+      const dY = clientY - last.y;
+      inputRef.current.lookDeltaYaw += dX * 0.009;
+      inputRef.current.lookDeltaPitch += dY * 0.012;
+    }
+    eyeLastPointRef.current = { x: clientX, y: clientY };
     inputRef.current.isHoldingEye = true;
   };
 
@@ -145,6 +151,7 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     eyePointerIdRef.current = e.pointerId;
+    eyeLastPointRef.current = { x: e.clientX, y: e.clientY };
     setIsDraggingEye(true);
     updateEyeFromPointer(e.clientX, e.clientY);
   };
@@ -154,12 +161,11 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
     updateEyeFromPointer(e.clientX, e.clientY);
   };
 
-  const releaseEyeToDefault = () => {
+  const releaseEye = () => {
     eyePointerIdRef.current = null;
+    eyeLastPointRef.current = null;
     setIsDraggingEye(false);
     setEyeKnobPos({ x: 0, y: 0 });
-    inputRef.current.eyeLookYaw = 0;
-    inputRef.current.eyeLookPitch = 0;
     inputRef.current.isHoldingEye = false;
   };
 
@@ -294,13 +300,13 @@ export const MobileMovementPad: React.FC<MobileMovementPadProps> = ({
           role="button"
           tabIndex={0}
           data-testid="camera-eye-360-btn"
-          aria-label="Mắt Camera giữ kéo để nhìn xung quanh, thả tay về góc nhìn mặc định"
-          title="Giữ và kéo biểu tượng Mắt để liếc nhìn theo hướng đó, thả tay tự quay về mặc định"
+          aria-label="Mắt Camera kéo để xoay góc nhìn, góc nhìn được giữ sau khi thả tay"
+          title="Kéo biểu tượng Mắt để xoay góc nhìn (vuốt trái/phải để quay camera), thả tay vẫn giữ góc mới"
           onPointerDown={handleEyePointerDown}
           onPointerMove={handleEyePointerMove}
-          onPointerUp={releaseEyeToDefault}
-          onPointerCancel={releaseEyeToDefault}
-          onLostPointerCapture={releaseEyeToDefault}
+          onPointerUp={releaseEye}
+          onPointerCancel={releaseEye}
+          onLostPointerCapture={releaseEye}
           className={`relative w-11 h-11 rounded-full border flex items-center justify-center cursor-grab active:cursor-grabbing transition-all ${
             isDraggingEye
               ? 'bg-[#9e1b24]/65 border-[#d4af37]/80 opacity-95'

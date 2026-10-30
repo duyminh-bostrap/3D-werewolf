@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ROLE_CATALOG, isWolfPackRole, type RoleId } from '../game/rules';
 import { soundEngine } from '../audio/soundEngine';
 
@@ -220,29 +220,29 @@ export const RoleTarotModal: React.FC<RoleTarotModalProps> = ({
 }) => {
   const meta = ROLE_CATALOG[role] || ROLE_CATALOG.villager;
   const [isFlipped, setIsFlipped] = useState(!isInitialReveal);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const autoFlipTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (isInitialReveal) {
-      const timer = window.setTimeout(() => {
+      autoFlipTimer.current = window.setTimeout(() => {
+        autoFlipTimer.current = null;
         setIsFlipped(true);
         soundEngine.playCardFlip(isWolfPackRole(role));
       }, 420);
-      return () => clearTimeout(timer);
+      return () => {
+        if (autoFlipTimer.current !== null) window.clearTimeout(autoFlipTimer.current);
+        autoFlipTimer.current = null;
+      };
     }
   }, [isInitialReveal, role]);
 
   const handleFlipToggle = () => {
-    const next = !isFlipped;
-    setIsFlipped(next);
+    if (autoFlipTimer.current !== null) {
+      window.clearTimeout(autoFlipTimer.current);
+      autoFlipTimer.current = null;
+    }
+    setIsFlipped((current) => !current);
     soundEngine.playCardFlip(isWolfPackRole(role));
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 16;
-    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * -16;
-    setTilt({ x: ny, y: nx });
   };
 
   const factionName =
@@ -267,15 +267,13 @@ export const RoleTarotModal: React.FC<RoleTarotModalProps> = ({
         {/* Interactive 3D Tarot Card Container */}
         <div
           onClick={handleFlipToggle}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={() => setTilt({ x: 0, y: 0 })}
           className="w-80 h-[470px] perspective-1200 cursor-pointer select-none mb-5"
           title="Nhấp để lật lá bài Tarot"
         >
           <div
             className="relative w-full h-full duration-700 preserve-3d transition-transform"
             style={{
-              transform: `rotateY(${isFlipped ? 180 : 0}deg) rotateX(${tilt.x}deg) rotateZ(${tilt.y * 0.15}deg)`,
+              transform: `rotateY(${isFlipped ? 180 : 0}deg)`,
             }}
           >
             {/* Card Back (Unflipped Occult Engraving) */}

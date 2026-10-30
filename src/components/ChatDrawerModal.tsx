@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, ScrollText, Send, X, Sparkles } from 'lucide-react';
+import { MessageSquare, ScrollText, Send, X, Sparkles, Moon, Skull } from 'lucide-react';
 import type { ChatMessage } from '../../server';
+import { isWolfPackRole, type GamePhase, type PlayerState } from '../game/rules';
 
 interface ChatDrawerModalProps {
   isOpen: boolean;
   messages: ChatMessage[];
   logs: string[];
+  phase: GamePhase;
+  localPlayer: PlayerState;
   onSendChat: (text: string) => void;
   onClose: () => void;
 }
@@ -21,12 +24,17 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
   isOpen,
   messages,
   logs,
+  phase,
+  localPlayer,
   onSendChat,
   onClose,
 }) => {
   const [tab, setTab] = useState<'chat' | 'logs'>('chat');
   const [chatText, setChatText] = useState('');
   const listEndRef = useRef<HTMLDivElement | null>(null);
+
+  const isDead = !localPlayer.isAlive;
+  const isWolfChannel = phase === 'night' && isWolfPackRole(localPlayer.role) && !isDead;
 
   useEffect(() => {
     if (isOpen) {
@@ -39,7 +47,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = chatText.trim();
-    if (!trimmed) return;
+    if (!trimmed || isDead) return;
     onSendChat(trimmed);
     setChatText('');
   };
@@ -60,6 +68,18 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
             <h2 className="text-sm font-bold font-display text-white tracking-wide">
               Thanh Thảo Luận & Nhật Ký Làng
             </h2>
+            {isWolfChannel && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-950/80 border border-red-500/50 text-[10px] font-bold text-red-200">
+                <Moon className="w-3 h-3" />
+                Kênh Sói
+              </span>
+            )}
+            {isDead && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-800/90 border border-slate-500/50 text-[10px] font-bold text-slate-300">
+                <Skull className="w-3 h-3" />
+                Đã Chết
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -106,19 +126,41 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
             <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 bg-[#09070e]">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
-                  <Sparkles className="w-6 h-6 text-[#d4af37]/60" />
-                  <p className="text-xs">
-                    Chưa có lời biện hộ nào. Hãy gửi tin nhắn hoặc chọn câu thoại nhanh bên dưới!
-                  </p>
+                  {isDead ? (
+                    <>
+                      <Skull className="w-6 h-6 text-red-400/70" />
+                      <p className="text-xs">
+                        Bạn đã ngã xuống — hồn ma không thể cất tiếng. Hãy theo dõi cuộc chơi.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-6 h-6 text-[#d4af37]/60" />
+                      <p className="text-xs">
+                        {isWolfChannel
+                          ? 'Màn đêm buông xuống. Đây là kênh riêng của bầy sói — dân làng không nghe được.'
+                          : 'Chưa có lời biện hộ nào. Hãy gửi tin nhắn hoặc chọn câu thoại nhanh bên dưới!'}
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 messages.map((m) => (
                   <div
                     key={m.id}
-                    className="rounded-xl bg-[#161221] border border-white/10 px-3 py-2 text-xs space-y-0.5"
+                    className={`rounded-xl border px-3 py-2 text-xs space-y-0.5 ${
+                      m.channel === 'wolves'
+                        ? 'bg-[#1c0f14] border-red-500/40'
+                        : 'bg-[#161221] border-white/10'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <strong className="text-[#d4af37] font-semibold">{m.senderName}</strong>
+                      {m.channel === 'wolves' && (
+                        <span className="px-1.5 py-0.5 rounded bg-red-900/80 border border-red-500/40 text-[9px] font-bold text-red-200">
+                          SÓI · ĐÊM
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-200 leading-relaxed break-words">{m.text}</p>
                   </div>
@@ -137,8 +179,9 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                   <button
                     key={idx}
                     type="button"
+                    disabled={isDead}
                     onClick={() => onSendChat(phrase)}
-                    className="px-2.5 py-1 rounded-lg bg-[#1d172b] hover:bg-[#2a213d] border border-white/10 text-[11px] text-slate-200 whitespace-nowrap cursor-pointer transition-colors"
+                    className="px-2.5 py-1 rounded-lg bg-[#1d172b] hover:bg-[#2a213d] border border-white/10 text-[11px] text-slate-200 whitespace-nowrap cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     {phrase}
                   </button>
@@ -156,14 +199,22 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                 data-testid="chat-drawer-input"
                 value={chatText}
                 onChange={(e) => setChatText(e.target.value)}
-                placeholder="Nhập lời biện hộ hoặc suy luận..."
-                className="flex-1 px-3 py-2.5 rounded-xl bg-[#09070e] border border-white/15 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+                disabled={isDead}
+                placeholder={
+                  isDead
+                    ? 'Đã chết — không thể nói'
+                    : isWolfChannel
+                    ? 'Nhắn riêng cho bầy sói...'
+                    : 'Nhập lời biện hộ hoặc suy luận...'
+                }
+                className="flex-1 px-3 py-2.5 rounded-xl bg-[#09070e] border border-white/15 text-xs text-white focus:outline-none focus:border-[#d4af37] disabled:opacity-55 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
                 data-testid="chat-drawer-send-btn"
+                disabled={isDead}
                 aria-label="Gửi tin nhắn"
-                className="px-4 py-2.5 rounded-xl bg-[#9e1b24] hover:bg-[#b91c1c] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                className="px-4 py-2.5 rounded-xl bg-[#9e1b24] hover:bg-[#b91c1c] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Gửi</span>
