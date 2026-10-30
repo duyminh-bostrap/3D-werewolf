@@ -1692,7 +1692,9 @@ function createCompactPlayerLabelSprite(
     ctx.moveTo(20, 24); ctx.lineTo(30, 31); ctx.lineTo(38, 18); ctx.lineTo(46, 31); ctx.lineTo(56, 24); ctx.lineTo(52, 47); ctx.lineTo(24, 47); ctx.closePath(); ctx.fill();
     ctx.fillStyle = isAlive ? '#f8fafc' : '#94a3b8';
   }
-  ctx.fillText(displayName, isHost ? (w + 48) / 2 : w / 2, h / 2 + 1, isHost ? w - 82 : w - 24);
+  const textLeft = isHost ? 64 : 12;
+  const textRight = isSpeaking && isAlive ? w - 48 : w - 12;
+  ctx.fillText(displayName, (textLeft + textRight) / 2, h / 2 + 1, textRight - textLeft);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -1704,6 +1706,36 @@ function createCompactPlayerLabelSprite(
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(isSelected ? 2.9 : 2.7, isSelected ? 0.66 : 0.61, 1);
+  mat.fog = false;
+  mat.toneMapped = false;
+  if (isSpeaking && isAlive) {
+    const micCanvas = document.createElement('canvas');
+    micCanvas.width = 32;
+    micCanvas.height = 48;
+    const micCtx = micCanvas.getContext('2d')!;
+    micCtx.fillStyle = '#6ee7b7';
+    micCtx.beginPath();
+    micCtx.roundRect(11, 5, 10, 22, 5);
+    micCtx.fill();
+    micCtx.strokeStyle = '#6ee7b7';
+    micCtx.lineWidth = 3;
+    micCtx.lineCap = 'round';
+    micCtx.beginPath();
+    micCtx.moveTo(6, 21); micCtx.lineTo(6, 25);
+    micCtx.arc(16, 25, 10, Math.PI, 0, true);
+    micCtx.lineTo(26, 21);
+    micCtx.moveTo(16, 35); micCtx.lineTo(16, 42);
+    micCtx.moveTo(10, 42); micCtx.lineTo(22, 42);
+    micCtx.stroke();
+    const micTexture = new THREE.CanvasTexture(micCanvas);
+    micTexture.colorSpace = THREE.SRGBColorSpace;
+    const mic = new THREE.Sprite(new THREE.SpriteMaterial({ map: micTexture, transparent: true, fog: false, toneMapped: false, depthTest: true, depthWrite: false }));
+    mic.name = 'speaking_mic';
+    mic.scale.set(0.1, 0.75, 1);
+    mic.position.set(0.41, 0, 0.01);
+    mic.renderOrder = 11;
+    sprite.add(mic);
+  }
   sprite.position.set(0, 3.4, 0);
   sprite.renderOrder = 10;
   return sprite;

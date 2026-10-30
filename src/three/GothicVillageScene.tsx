@@ -61,6 +61,15 @@ const _hemiSkyTarget = new THREE.Color();
 const _hemiGroundTarget = new THREE.Color();
 const _keyColorTarget = new THREE.Color();
 
+function disposePlayerLabel(label: THREE.Sprite) {
+  label.traverse((object) => {
+    if (object instanceof THREE.Sprite) {
+      object.material.map?.dispose();
+      object.material.dispose();
+    }
+  });
+}
+
 export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
   isTitleScreen,
   isIntroPlaying,
@@ -247,6 +256,9 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     // Warm flickering central bonfire PointLight
     const bonfireLight = new THREE.PointLight(0xff6b1a, 4.5, 26, 1.6);
     bonfireLight.position.set(0, 2.4, 0);
+    const plazaFillLight = new THREE.PointLight(0xb9d5ff, 0, 28, 1.4);
+    plazaFillLight.position.set(0, 7, 0);
+    scene.add(plazaFillLight);
     scene.add(bonfireLight);
 
     // Eerie Blood Moon Orb in the sky beside the Gothic Bell Tower spire (immune to fog)
@@ -555,6 +567,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       // Remove departed players
       for (const [id, entry] of avatarMap.entries()) {
         if (!activeIds.has(id)) {
+          disposePlayerLabel(entry.labelSprite);
           playersRoot.remove(entry.group);
           const hbIdx = interactableHitboxes.indexOf(entry.hitbox);
           if (hbIdx !== -1) interactableHitboxes.splice(hbIdx, 1);
@@ -587,6 +600,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         let entry = avatarMap.get(p.id);
         if (!entry || entry.signature !== sig) {
           if (entry) {
+            disposePlayerLabel(entry.labelSprite);
             playersRoot.remove(entry.group);
             const hbIdx = interactableHitboxes.indexOf(entry.hitbox);
             if (hbIdx !== -1) interactableHitboxes.splice(hbIdx, 1);
@@ -598,6 +612,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial && !object.parent?.name.includes('target')) bodyMeshes.push(object);
           });
           for (const mesh of bodyMeshes) {
+            (mesh.material as THREE.MeshStandardMaterial).fog = false;
             const outline = new THREE.Mesh(mesh.geometry, wolfOutlineMaterial);
             outline.name = 'wolf_team_outline';
             outline.scale.setScalar(1.065);
@@ -648,8 +663,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           avatarMap.set(p.id, entry);
         } else if (entry.labelSignature !== labelSig) {
           entry.group.remove(entry.labelSprite);
-          entry.labelSprite.material.map?.dispose();
-          entry.labelSprite.material.dispose();
+          disposePlayerLabel(entry.labelSprite);
           const updatedSprite = createPlayerLabelSprite(
             p.name,
             p.appearance.epithet,
@@ -863,6 +877,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
       const dampFactor = 1 - Math.exp(-10 * dt);
       for (const [id, entry] of avatarMap.entries()) {
+        const speakingMic = entry.labelSprite.getObjectByName('speaking_mic') as THREE.Sprite | undefined;
+        if (speakingMic) speakingMic.material.opacity = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(elapsed * 9));
         const prevX = entry.group.position.x;
         const prevZ = entry.group.position.z;
         entry.group.position.x = THREE.MathUtils.lerp(prevX, entry.targetX, dampFactor);
@@ -1079,6 +1095,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             props.phase === 'hunter_revenge'
           ? 'day'
           : 'day';
+
+      plazaFillLight.intensity = THREE.MathUtils.lerp(plazaFillLight.intensity, effectiveStage === 'night' ? 28 : 0, dampFactor);
 
       // Animate Central Bonfire, Cathedral Bell & Rising Ember Particles
       const flicker = 1 + Math.sin(elapsed * 9.5) * 0.12 + Math.cos(elapsed * 15.2) * 0.08;
@@ -1311,6 +1329,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       clearTimeout(frameId);
       pointingHand.traverse((object) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
       wolfOutlineMaterial.dispose();
+      for (const entry of avatarMap.values()) disposePlayerLabel(entry.labelSprite);
       gloveMaterial.dispose();
       sleeveMaterial.dispose();
       window.removeEventListener('keydown', onKeyDown);
