@@ -7,7 +7,6 @@ import {
   Flame,
   Minus,
   Plus,
-  Info,
   ChevronRight,
   BookOpen,
   Trophy,
@@ -251,7 +250,6 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
                 <button type="button" data-testid={`role-info-btn-${roleId}`} onClick={() => setInspectingRoleId(roleId)} aria-label={`Giải thích vai trò ${meta.nameVi}`}
                   className="relative flex h-16 items-center justify-center rounded-lg bg-black/25 focus-visible:outline-2 focus-visible:outline-amber-200">
                   <span aria-hidden="true" className="h-[66px] w-[66px] max-w-full [&_svg]:!h-full [&_svg]:!w-full">{renderRoleWoodcutSvg(roleId, meta.accentColor)}</span>
-                  <Info aria-hidden="true" className="absolute right-1 top-1 h-3.5 w-3.5 text-[#e8cd82]" />
                 </button>
                 <div className="flex-1 py-1"><h3 title={meta.nameVi} className="min-h-7 break-words text-[11px] font-semibold leading-[14px] text-slate-100">{ROLE_LABELS[roleId]}</h3></div>
                 <div className="grid grid-cols-[minmax(24px,1fr)_16px_minmax(24px,1fr)] items-center rounded-lg border border-white/10 bg-black/20">
@@ -269,7 +267,6 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
               <button type="button" data-testid="role-info-btn-villager" onClick={() => setInspectingRoleId('villager')} aria-label="Giải thích vai trò Dân Làng"
                 className="relative flex h-16 items-center justify-center rounded-lg bg-black/25 focus-visible:outline-2 focus-visible:outline-amber-200">
                 <span aria-hidden="true" className="h-[66px] w-[66px] max-w-full [&_svg]:!h-full [&_svg]:!w-full">{renderRoleWoodcutSvg('villager', ROLE_CATALOG.villager.accentColor)}</span>
-                <Info aria-hidden="true" className="absolute right-1 top-1 h-3.5 w-3.5 text-[#e8cd82]" />
               </button>
               <div className="flex-1 py-1"><h3 title={ROLE_CATALOG.villager.nameVi} className="min-h-7 break-words text-[11px] font-semibold leading-[14px] text-slate-100">Dân Làng</h3></div>
               <div className="flex min-h-6 items-center justify-center rounded-lg border border-white/10 bg-black/20 text-xs font-bold tabular-nums text-white">×{villagerCount}</div>
