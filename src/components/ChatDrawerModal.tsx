@@ -123,7 +123,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
         {/* Body Content */}
         {tab === 'chat' ? (
           <>
-            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 bg-[#09070e]">
+            <div className="modal-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 space-y-2.5 bg-[#09070e]">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
                   {isDead ? (
@@ -174,7 +174,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
               <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">
                 Thoại Nhanh Phiên Tòa
               </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <div className="quick-chat-strip flex items-center gap-1.5 overflow-x-auto overscroll-x-contain pb-1">
                 {QUICK_PHRASES.map((phrase, idx) => (
                   <button
                     key={idx}
@@ -222,7 +222,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
             </form>
           </>
         ) : (
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-2 bg-[#09070e]">
+          <div className="modal-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 space-y-2 bg-[#09070e]">
             {logs.map((log, i) => (
               <div
                 key={i}

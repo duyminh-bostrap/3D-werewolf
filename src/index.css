@@ -56,6 +56,28 @@
   scrollbar-color: #4a3c54 transparent;
 }
 
+.game-results-scroll::-webkit-scrollbar,
+.modal-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.game-results-scroll::-webkit-scrollbar-track,
+.modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.game-results-scroll::-webkit-scrollbar-thumb,
+.modal-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #4a3c54;
+}
+
+.game-results-scroll::-webkit-scrollbar-thumb:hover,
+.modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: #796284;
+}
+
 .brand-wordmark {
   font-family: "Rajdhani", var(--font-sans);
 }
