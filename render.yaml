@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: 3d-werewolf
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    # App cần server Node + WebSocket chạy dài hạn (state phòng chơi nằm trong RAM),
+    # nên phải deploy dạng web service, không dùng static/serverless.
+    buildCommand: npm ci --include=dev && npm run build:prod
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.19.0
