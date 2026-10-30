@@ -7,7 +7,7 @@ services:
     branch: main
     # App cần server Node + WebSocket chạy dài hạn (state phòng chơi nằm trong RAM),
     # nên phải deploy dạng web service, không dùng static/serverless.
-    buildCommand: npm ci --include=dev && npm run build:prod
+    buildCommand: npm install --include=dev --no-audit --no-fund && npm run build:prod
     startCommand: npm run start:prod
     healthCheckPath: /api/health
     autoDeploy: true
