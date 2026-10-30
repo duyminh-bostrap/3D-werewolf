@@ -759,7 +759,7 @@ export function getSeatTransform(
 ): { x: number; z: number; rotY: number } {
   const count = Math.max(1, totalSeats);
   const effectiveRadius = count > 10 ? radius + (count - 10) * 0.22 : radius;
-  const angle = (seatIndex / count) * Math.PI * 2 + Math.PI * 0.15;
+  const angle = Math.PI * 0.5 + (seatIndex / count) * Math.PI * 2;
   const x = Math.cos(angle) * effectiveRadius;
   const z = Math.sin(angle) * effectiveRadius;
   // Face inward toward the central bonfire (0, 0)

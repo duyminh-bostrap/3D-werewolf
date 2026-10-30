@@ -46,7 +46,7 @@ function createInitialLocalState(
       role: 'villager',
       seatIndex: 0,
       x: 0,
-      z: 12.8,
+      z: 8.6,
       rotY: Math.PI,
       appearance: localAppearance,
       isMuted: true,

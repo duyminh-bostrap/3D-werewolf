@@ -341,7 +341,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
     const keysPressed = new Set<string>();
     let localPosInitialized = false;
     let localX = 0;
-    let localZ = 12.8;
+    let localZ = 8.6;
     let localY = 0;
     let localVelY = 0;
     let localRotY = Math.PI;
@@ -1111,7 +1111,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, targetFogDensity, colorLerp);
       }
 
-      // 5. Panoramic 3rd-Person Follow Camera Choreography with Spring-Arm Collision & Building Occlusion
+      // 5. Panoramic Full-Circle Tactical Camera Choreography (frames all 5-15 players clearly for easy selection)
       let activeOccludedIndices: number[] = [];
       if (props.isTitleScreen) {
         const tourAngle = elapsed * 0.14;
@@ -1121,52 +1121,60 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           Math.cos(tourAngle) * 19.5 + 3.0
         );
         _camLookAt.set(0, 3.2, -7.0);
-      } else if (props.cameraPreset !== 'overview') {
+      } else {
         const localEntry = avatarMap.get(props.localPlayerId);
         const px = localEntry ? localEntry.group.position.x : localX;
         const pz = localEntry ? localEntry.group.position.z : localZ;
-        const isPortrait = camera.aspect < 1;
+        const isMovableLobby = canPlayerMoveInPhase(props.phase) && props.cameraPreset === 'follow';
 
-        // Panoramic 3rd-person follow distance & elevation so both the local 3D avatar
-        // and the wide village square + surrounding 3D players are clearly visible
-        const followDist = isPortrait ? 10.6 : 9.4;
-        const baseHeight = isPortrait ? 6.6 : 5.5;
-        const camHeight = THREE.MathUtils.clamp(baseHeight + orbitPitchOffset, 2.4, 12.5);
+        // Compute minimum 3D distance so the entire player circle (radius 8.2..9.3m + labels)
+        // fits comfortably inside both mobile portrait (aspect < 1) and desktop viewports
+        const playerCount = Math.max(5, props.players.length);
+        const circleRadius = playerCount > 10 ? 8.2 + (playerCount - 10) * 0.22 : 8.2;
+        const vFovRad = THREE.MathUtils.degToRad(camera.fov);
+        const tanHalfVFov = Math.tan(vFovRad * 0.5);
+        const tanHalfHFov = Math.max(0.34, tanHalfVFov * camera.aspect);
 
-        const desiredCamX = px + Math.sin(orbitYawOffset) * followDist;
-        const desiredCamZ = pz + Math.cos(orbitYawOffset) * followDist;
+        const requiredSpanHalfWidth = circleRadius + 2.6;
+        const minCenterDist = Math.max(19.2, requiredSpanHalfWidth / tanHalfHFov);
 
-        // Spring-arm obstacle collision so camera never clips inside cottages or towers behind player
-        const camCol = resolveCameraCollision(
-          px,
-          pz,
-          desiredCamX,
-          desiredCamZ,
-          obstacles,
-          1.8,
-          3.6
-        );
-        activeOccludedIndices = camCol.occludedObstacleIndices;
+        const groundDist = minCenterDist * 0.84;
+        const baseHeight = Math.max(11.2, minCenterDist * 0.55);
+        const camHeight = THREE.MathUtils.clamp(baseHeight + orbitPitchOffset * 1.2, 5.5, 22.0);
 
-        _camTargetPos.set(camCol.x, camHeight + localY * 0.35, camCol.z);
+        // In active game phases (Night, Day Discussion, Voting, Trial), anchor 100% on the bonfire circle
+        // so every single player is symmetrically framed and effortless to tap/select.
+        // In Lobby, blend 22% of local player offset so walking still feels responsive while keeping everyone in view.
+        const anchorX = isMovableLobby ? px * 0.22 : 0;
+        const anchorZ = isMovableLobby ? (pz - 8.2) * 0.22 : 0;
 
-        // Look over the local player's shoulder/head toward the village plaza along camera forward gaze
-        const forwardX = -Math.sin(orbitYawOffset);
-        const forwardZ = -Math.cos(orbitYawOffset);
-        const lookAheadDist = isPortrait ? 6.2 : 5.2;
-        const plazaPull = 0.25;
+        const desiredCamX = anchorX + Math.sin(orbitYawOffset) * groundDist;
+        const desiredCamZ = anchorZ + Math.cos(orbitYawOffset) * groundDist;
+
+        if (camHeight < 9.5) {
+          const camCol = resolveCameraCollision(
+            anchorX,
+            anchorZ,
+            desiredCamX,
+            desiredCamZ,
+            obstacles,
+            1.8,
+            3.6
+          );
+          activeOccludedIndices = camCol.occludedObstacleIndices;
+          _camTargetPos.set(camCol.x, camHeight + localY * 0.25, camCol.z);
+        } else {
+          _camTargetPos.set(desiredCamX, camHeight + localY * 0.25, desiredCamZ);
+        }
+
+        // Look directly at the center of the player circle (slightly forward in Z so the ring sits between top and bottom HUD bars)
+        const forwardLookX = -Math.sin(orbitYawOffset) * 1.2;
+        const forwardLookZ = 0.65 - Math.cos(orbitYawOffset) * 0.45;
         _camLookAt.set(
-          px * (1 - plazaPull) + forwardX * lookAheadDist,
-          1.95 + localY * 0.45 - orbitPitchOffset * 0.22,
-          pz * (1 - plazaPull) + forwardZ * lookAheadDist
+          anchorX + forwardLookX,
+          1.25 + localY * 0.2 - orbitPitchOffset * 0.25,
+          anchorZ + forwardLookZ
         );
-      } else {
-        _camTargetPos.set(
-          Math.sin(orbitYawOffset) * 24,
-          THREE.MathUtils.clamp(14.5 + orbitPitchOffset * 1.5, 6.0, 22.0),
-          Math.cos(orbitYawOffset) * 24
-        );
-        _camLookAt.set(0, 1.5, -2);
       }
 
       const camLambda = 1 - Math.exp(-8.5 * dt);
