@@ -1,5 +1,7 @@
 # Supabase setup
 
+Social login is temporarily hidden (`SOCIAL_LOGIN_ENABLED = false` in `src/lib/socialAuth.ts`). Startup continues directly as a guest after the intro, and the account panel is hidden in settings. Existing local characters and background profile sync are preserved. Set this flag to true after the provider setup below is complete.
+
 The app supports guest play, Google and Apple. Guest profiles can be linked to a provider to retain the same user ID and saved character. Existing account login loads the remote character instead of overwriting it with local guest edits.
 
 1. Run `profiles.sql` and `friends.sql` in the project's SQL Editor. The new friends table uses owner-specific RLS; the SQL closes the previous public-access table without deleting it.

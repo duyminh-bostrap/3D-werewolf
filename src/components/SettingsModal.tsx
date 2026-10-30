@@ -1,4 +1,5 @@
 import { AccountPanel } from './AccountPanel';
+import { SOCIAL_LOGIN_ENABLED } from '../lib/socialAuth';
 import React from 'react';
 import {
   Settings,
@@ -78,7 +79,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </header>
 
         <div className="min-h-0 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
-          <AccountPanel />
+          {SOCIAL_LOGIN_ENABLED && <AccountPanel />}
           <section className={section} aria-labelledby="settings-personal">
             <h3 id="settings-personal" className={heading}>Nhân vật & hiển thị</h3>
             <button type="button" onClick={onOpenCustomizer} className={row}><span className="flex min-w-0 items-center gap-3"><Palette className="h-4 w-4 shrink-0 text-violet-300" /> Sửa nhân vật</span><span aria-hidden="true" className="text-slate-400">›</span></button>

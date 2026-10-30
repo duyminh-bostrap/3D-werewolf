@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export const SOCIAL_LOGIN_ENABLED = false;
+
 export async function isSocialProviderEnabled(provider: 'google' | 'apple', url: string, key: string, request: typeof fetch = fetch): Promise<boolean> {
   const response = await request(new URL('/auth/v1/settings', url), { headers: { apikey: key }, cache: 'no-store' });
   if (!response.ok) throw new Error('Không thể kiểm tra dịch vụ đăng nhập.');

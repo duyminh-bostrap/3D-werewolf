@@ -1,6 +1,7 @@
 import { shouldShowGameOver } from './game/gameOver';
 import { BrandMark } from './components/BrandMark';
 import { AccountPanel } from './components/AccountPanel';
+import { SOCIAL_LOGIN_ENABLED } from './lib/socialAuth';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   APPEARANCE_PRESETS,
@@ -95,7 +96,7 @@ export default function App() {
   const initialRoomCode = (urlParams.get('room') || 'GOTHIC').toUpperCase();
   const isAutoStart = urlParams.get('autostart') === '1';
   const [isIntroPlaying, setIsIntroPlaying] = useState(!isAutoStart);
-  const [hasChosenAccount, setHasChosenAccount] = useState(isAutoStart);
+  const [hasChosenAccount, setHasChosenAccount] = useState(!SOCIAL_LOGIN_ENABLED || isAutoStart);
 
   const [localPlayerId] = useState<string>(() => {
     try {
