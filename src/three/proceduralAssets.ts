@@ -1551,7 +1551,8 @@ export function createPlayerLabelSprite(
   isSelected = false,
   compact = false,
   isHost = false,
-  speech?: string
+  speech?: string,
+  ready?: boolean
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = compact && !speech ? 320 : 384;
@@ -1559,7 +1560,7 @@ export function createPlayerLabelSprite(
   const ctx = canvas.getContext('2d')!;
 
   if (compact) {
-    return createCompactPlayerLabelSprite(canvas, ctx, name, isAlive, isSpeaking, voteCount, isLocal, isSelected, isHost, speech);
+    return createCompactPlayerLabelSprite(canvas, ctx, name, isAlive, isSpeaking, voteCount, isLocal, isSelected, isHost, speech, ready);
   }
 
   // Dark Gothic plaque background
@@ -1656,7 +1657,8 @@ function createCompactPlayerLabelSprite(
   isLocal: boolean,
   isSelected: boolean,
   isHost: boolean,
-  speech?: string
+  speech?: string,
+  ready?: boolean
 ): THREE.Sprite {
   const w = canvas.width;
   const h = canvas.height;
@@ -1725,6 +1727,12 @@ function createCompactPlayerLabelSprite(
     ctx.fillText(String(voteCount), w - 34, 37);
   }
 
+  if (ready !== undefined) {
+    ctx.strokeStyle = ready ? '#34d399' : '#fbbf24';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.roundRect(6, 6, w - 12, h - 12, 11); ctx.stroke();
+  }
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({
@@ -1765,6 +1773,22 @@ function createCompactPlayerLabelSprite(
     mic.position.set(0.41 - voteSpace / w, speech ? 0.5 - 29 / h : 0, 0.01);
     mic.renderOrder = 11;
     sprite.add(mic);
+  }
+  if (ready !== undefined) {
+    const badgeCanvas = document.createElement('canvas');
+    badgeCanvas.width = 320; badgeCanvas.height = 44;
+    const badgeCtx = badgeCanvas.getContext('2d')!;
+    badgeCtx.fillStyle = ready ? '#064e3b' : '#451a03';
+    badgeCtx.beginPath(); badgeCtx.roundRect(0, 0, 320, 44, 10); badgeCtx.fill();
+    badgeCtx.fillStyle = ready ? '#6ee7b7' : '#fde68a';
+    badgeCtx.font = '600 25px "Be Vietnam Pro", sans-serif';
+    badgeCtx.textAlign = 'center'; badgeCtx.textBaseline = 'middle';
+    badgeCtx.fillText(ready ? 'Đã sẵn sàng' : 'Chưa sẵn sàng', 160, 22);
+    const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
+    badgeTexture.colorSpace = THREE.SRGBColorSpace;
+    const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture, transparent: true, fog: false, toneMapped: false, depthTest: true, depthWrite: false }));
+    badge.scale.set(0.85, 0.34, 1); badge.position.set(0, -0.72, 0.01);
+    sprite.add(badge);
   }
   sprite.position.set(0, speech ? 3.08 + sprite.scale.y / 2 : 3.4, 0);
   sprite.renderOrder = 10;

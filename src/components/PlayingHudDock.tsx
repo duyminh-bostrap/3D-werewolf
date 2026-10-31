@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  MIN_ROOM_PLAYERS,
   QUICK_CHAT_PRESETS,
   ROLE_CATALOG,
   canBodyguardProtect,
@@ -62,6 +63,7 @@ interface PlayingHudDockProps {
   wolfTargetId: string | null;
   seerInspection: { targetId: string; isWerewolf: boolean; role: RoleId } | null;
   littleGirlClue?: string | null;
+  nightFeedback?: { id: string; text: string } | null;
   dayVotes: Record<string, string>;
   accusedPlayerId?: string | null;
   trialVotes?: Record<string, 'kill' | 'save'>;
@@ -119,7 +121,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   roomCode,
   phase,
   dayNumber,
-  maxPlayers = 8,
+  maxPlayers = MIN_ROOM_PLAYERS,
   players,
   localPlayer,
   selectedTargetId,
@@ -128,6 +130,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   wolfTargetId,
   seerInspection,
   littleGirlClue,
+  nightFeedback,
   dayVotes,
   accusedPlayerId = null,
   trialVotes = {},
@@ -164,6 +167,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   onVoiceStateChange,
 }) => {
   const [cupidFirstId, setCupidFirstId] = useState<string | null>(null);
+  const [dismissedFeedback, setDismissedFeedback] = useState('');
+  useEffect(() => { if (phase === 'lobby') setDismissedFeedback(''); }, [phase]);
   const [quickChatInput, setQuickChatInput] = useState('');
   const [showQuickPresets, setShowQuickPresets] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -554,6 +559,15 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       </div>
       {/* Bottom HUD Area: Ultra-Compact Icon-First Phase Bar + Mic/Chat Dock */}
       <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
+        {nightFeedback && nightFeedback.id !== dismissedFeedback && phase !== 'lobby' && (
+          <div role="status" aria-live="polite" data-testid="night-feedback" className="w-full max-w-sm rounded-xl border border-amber-300/50 bg-[#181324] p-3 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-amber-200">Kết quả kỹ năng · Đêm {dayNumber}</span>
+              <button type="button" aria-label="Đóng kết quả kỹ năng" onClick={() => setDismissedFeedback(nightFeedback.id)} className="p-2 text-slate-300"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="text-sm leading-relaxed text-white">{nightFeedback.text}</p>
+          </div>
+        )}
         {phaseTransition && (
           <div data-testid="phase-transition-countdown" role="status" aria-live="polite" className="flex items-center gap-3 rounded-xl border border-amber-200/40 bg-[#110d19]/95 px-4 py-2 text-sm font-semibold text-amber-100 shadow-lg">
             <Clock className="h-4 w-4" />
@@ -650,6 +664,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   </button>
                 )}
 
+                {localPlayer.role === 'witch' && <p className="w-full text-center text-sm text-slate-200">{wolfVictimPlayer ? `Sói đang tấn công ${wolfVictimPlayer.name}. Bạn có thể dùng thuốc cứu.` : 'Chờ Sói chọn mục tiêu. Chạm một người để chọn ném độc.'}</p>}
                 {localPlayer.role === 'witch' ? (
                   <>
                     <button
@@ -663,7 +678,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                       className="h-7 px-2 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-40 text-[11px] font-bold text-emerald-100 border border-emerald-400/40 flex items-center gap-1 cursor-pointer"
                     >
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>{witchState.hasHealPotion ? '1' : '0'}</span>
+                      <span>{!witchState.hasHealPotion ? 'Hết thuốc cứu' : wolfVictimPlayer ? `Cứu ${wolfVictimPlayer.name}` : 'Chưa có nạn nhân'}</span>
                     </button>
                     <button
                       type="button"
@@ -671,14 +686,14 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                       disabled={
                         !witchState.hasPoisonPotion ||
                         !selected3DPlayer ||
-                        !selected3DPlayer.isAlive
+                        !selected3DPlayer.isAlive || selected3DPlayer.id === localPlayer.id
                       }
                       onClick={handleConfirm3DNightAction}
                       title="Bình Độc"
                       className="h-7 px-2 rounded-lg bg-rose-900/80 hover:bg-rose-800 disabled:opacity-40 text-[11px] font-bold text-rose-100 border border-rose-400/40 flex items-center gap-1 cursor-pointer"
                     >
                       <Skull className="w-3.5 h-3.5" />
-                      <span>{witchState.hasPoisonPotion ? '1' : '0'}</span>
+                      <span>{!witchState.hasPoisonPotion ? 'Hết thuốc độc' : selected3DPlayer ? `Ném độc ${selected3DPlayer.name}` : 'Chọn người ném độc'}</span>
                     </button>
                   </>
                 ) : (

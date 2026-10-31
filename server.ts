@@ -1,3 +1,4 @@
+import { nightFeedback } from './src/game/nightFeedback';
 import { canUseVoice, canShareVoice } from './src/game/voiceChannel';
 import { deathNotice } from './src/game/deathNotifications';
 import express from 'express';
@@ -61,6 +62,7 @@ export interface ChatMessage {
 export interface RoomPublicState {
   phaseTransition?: PhaseTransition | null;
   littleGirlClue?: string | null;
+  nightFeedback?: { id: string; text: string } | null;
   nightRecaps?: Array<{ night: number; lines: string[] }>;
   roomCode: string;
   phase: GamePhase;
@@ -94,6 +96,7 @@ interface ServerRoom extends RoomPublicState {
   hunterTargets?: Record<string, string>;
   inspections?: Record<string, NonNullable<RoomPublicState['seerInspection']>>;
   littleGirlClues?: Record<string, string>;
+  feedbackByPlayer?: Record<string, { id: string; text: string }>;
   lastAnnouncedPhase?: string;
   nightActions: NightActionsInput;
   clients: Map<string, WebSocket>;
@@ -170,9 +173,9 @@ function getOrCreateRoom(roomCode: string): ServerRoom {
       roomCode: normalized,
       phase: 'lobby',
       dayNumber: 1,
-      maxPlayers: MAX_ROOM_PLAYERS,
+      maxPlayers: MIN_ROOM_PLAYERS,
       players: [],
-      roleDeck: { ...DEFAULT_ROLE_DECK },
+      roleDeck: getRecommendedRoleDeckForCount(MIN_ROOM_PLAYERS),
       witchState: { hasHealPotion: true, hasPoisonPotion: true },
       lastProtectedId: null,
       lovers: null,
@@ -229,7 +232,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     roomCode: room.roomCode,
     phase: room.phase,
     dayNumber: room.dayNumber,
-    maxPlayers: room.maxPlayers ?? 8,
+    maxPlayers: room.maxPlayers ?? MIN_ROOM_PLAYERS,
     players: room.players.map((p) => canShareVoice(room.phase, viewer, p) ? p : { ...p, isMuted: true, isSpeaking: false }),
     roleDeck: room.roleDeck,
     witchState: { ...(room.witchStates?.[viewerId ?? ''] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert },
@@ -238,6 +241,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     wolfTargetId: room.wolfTargetId,
     seerInspection: room.inspections?.[viewerId ?? ''] ?? null,
     littleGirlClue: room.littleGirlClues?.[viewerId ?? ''] ?? null,
+    nightFeedback: room.feedbackByPlayer?.[viewerId ?? ''] ?? null,
     nightRecaps: room.phase === 'ended' ? room.nightRecaps ?? [] : [],
     dayVotes: room.dayVotes,
     accusedPlayerId: room.accusedPlayerId ?? null,
@@ -349,6 +353,7 @@ function applyNightChoice(room: ServerRoom, actor: PlayerState, choice: { type: 
               for (const target of Object.values(room.nightActions.wolfVotes)) tally.set(target, (tally.get(target) ?? 0) + 1);
               room.wolfTargetId = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
             }
+            (room.feedbackByPlayer ??= {})[actor.id] = { id: `${room.dayNumber}:${actor.id}:${actionType}`, text: actor.role === 'little_girl' && actionType !== 'skip_night_role' ? room.littleGirlClues![actor.id] : nightFeedback(actor, choice, room.players) };
             markPlayerActed(room, actor.id);
 
 }
@@ -436,6 +441,7 @@ function enterNightPhase(room: ServerRoom) {
   room.seerInspection = null;
   room.inspections = {};
   room.littleGirlClues = {};
+  room.feedbackByPlayer = {};
   room.accusedPlayerId = null;
   room.trialVotes = {};
   room.nightActions = createEmptyNightActions();
@@ -965,7 +971,7 @@ async function startServer() {
               const usedNames = new Set(room.players.map((p) => p.name));
               const newBot = createBotPlayer(room.players.length, usedNames);
               room.players.push(newBot);
-              if (room.players.length > (room.maxPlayers ?? 8)) {
+              if (room.players.length > (room.maxPlayers ?? MIN_ROOM_PLAYERS)) {
                 room.maxPlayers = room.players.length;
               }
               room.players.forEach((p, idx) => {
@@ -1108,7 +1114,7 @@ async function startServer() {
             if (!caller || !caller.isHost || room.phase !== 'lobby') {
               break;
             }
-            const validation = validateLobbyStart(room.players, room.maxPlayers ?? 8);
+            const validation = validateLobbyStart(room.players, room.maxPlayers ?? MIN_ROOM_PLAYERS);
             if (!validation.canStart) {
               room.logs.push(`Chưa thể bắt đầu: ${validation.reasonVi}.`);
               broadcastRoomState(room);
@@ -1157,6 +1163,7 @@ async function startServer() {
             room.hunterTargets = {};
             room.inspections = {};
             room.littleGirlClues = {};
+  room.feedbackByPlayer = {};
             room.nightRecaps = [];
             room.players.forEach((p) => { delete p.deathPeriod; delete p.deathRound; });
             room.dayNumber = 1;
@@ -1267,6 +1274,7 @@ async function startServer() {
             room.messages = room.messages.filter((m) => m.channel !== 'system');
             room.inspections = {};
             room.littleGirlClues = {};
+  room.feedbackByPlayer = {};
             room.hunterTargets = {};
             room.players = room.players.filter((p) => p.isBot || room.clients.has(p.id));
             room.dayNumber = 1;

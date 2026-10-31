@@ -16,6 +16,7 @@ const send = (c, data) => c.ws.send(JSON.stringify(data));
 (async () => {
   const room = 'LIMIT_' + Date.now();
   const host = await join('host', room);
+  assert.equal(host.state.maxPlayers, 5);
   assert.equal(host.state.players.length, 1);
   assert.equal(host.state.players.some(p => p.isBot), false);
   send(host, { type: 'room:set-player-count', targetCount: 5 });

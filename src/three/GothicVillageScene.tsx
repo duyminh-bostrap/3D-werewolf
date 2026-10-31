@@ -644,7 +644,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         const vCount = voteCounts[p.id] || 0;
         const isSelected = selectedId === p.id;
         const speech = chatBubbles.get(p.id);
-        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}_${compactLabels ? 'c' : 'f'}_${p.isHost}_${speech?.id ?? ''}`;
+        const labelSig = `${p.name}_${p.appearance.epithet}_${p.seatIndex}_${p.isAlive}_${p.isSpeaking}_${vCount}_${p.id === localId}_${isSelected}_${compactLabels ? 'c' : 'f'}_${p.isHost}_${speech?.id ?? ''}_${currentPhase === 'lobby' ? p.isReady : ''}_${currentPhase}`;
 
         let entry = avatarMap.get(p.id);
         if (!entry || entry.signature !== sig) {
@@ -679,7 +679,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             isSelected,
             compactLabels,
             p.isHost,
-            speech?.text
+            speech?.text,
+            currentPhase === 'lobby' ? Boolean(p.isHost || p.isReady) : undefined
           );
           newGroup.add(labelSprite);
 
@@ -719,7 +720,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
             isSelected,
             compactLabels,
             p.isHost,
-            speech?.text
+            speech?.text,
+            currentPhase === 'lobby' ? Boolean(p.isHost || p.isReady) : undefined
           );
           entry.group.add(updatedSprite);
           entry.labelSprite = updatedSprite;

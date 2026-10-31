@@ -222,6 +222,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
           )}
         </div>
 
+        {isLobby && <p role="status" className="text-sm text-slate-200">{players.filter(p => !p.isHost && !p.isReady).length > 0 ? `Chưa sẵn sàng: ${players.filter(p => !p.isHost && !p.isReady).length} người` : 'Tất cả đã sẵn sàng'}</p>}
         {/* Full Player Roster Around the Bonfire */}
         <div className="space-y-1.5">
           <div data-testid="room-player-roster" className="modal-scroll grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto overscroll-contain pr-1">

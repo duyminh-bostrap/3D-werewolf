@@ -6,6 +6,7 @@ import { SOCIAL_LOGIN_ENABLED } from './lib/socialAuth';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   APPEARANCE_PRESETS,
+  MIN_ROOM_PLAYERS,
   canPlayerMoveInPhase,
   clampRoleDeckToPlayerCount,
   clampRoomPlayerCount,
@@ -68,9 +69,9 @@ function createInitialLocalState(
     roomCode,
     phase: 'lobby',
     dayNumber: 1,
-    maxPlayers: 15,
+    maxPlayers: MIN_ROOM_PLAYERS,
     players,
-    roleDeck: { ...DEFAULT_ROLE_DECK },
+    roleDeck: getRecommendedRoleDeckForCount(MIN_ROOM_PLAYERS),
     witchState: { hasHealPotion: true, hasPoisonPotion: true },
     lastProtectedId: null,
     lovers: null,
@@ -651,6 +652,7 @@ export default function App() {
           lastProtectedId={roomState.lastProtectedId}
           wolfTargetId={roomState.wolfTargetId}
           seerInspection={roomState.seerInspection}
+          nightFeedback={roomState.nightFeedback}
           littleGirlClue={roomState.littleGirlClue}
           dayVotes={roomState.dayVotes}
           accusedPlayerId={roomState.accusedPlayerId}
