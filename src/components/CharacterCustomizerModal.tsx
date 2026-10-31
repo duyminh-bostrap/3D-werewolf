@@ -243,7 +243,7 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
 
             <div className="text-center border-t border-white/10 pt-2">
               <div className="text-sm font-bold font-display text-white truncate">
-                {name || 'Lữ Khách Bí Ẩn'}
+                {name || 'Lữ Khách'}
               </div>
             </div>
           </div>

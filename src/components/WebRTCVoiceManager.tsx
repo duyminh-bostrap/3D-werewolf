@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
 import { attachMicrophone, MICROPHONE_CONSTRAINTS } from '../audio/voiceCapture';
+import { soundEngine } from '../audio/soundEngine';
 
 interface WebRTCVoiceManagerProps {
   wsRef: React.MutableRefObject<WebSocket | null>;
@@ -35,7 +36,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   const mountedRef = useRef(true);
   const aliveRef = useRef(localIsAlive);
   aliveRef.current = localIsAlive;
-  const vadContextRef = useRef<AudioContext | null>(null);
+  const vadNodesRef = useRef<{ source: MediaStreamAudioSourceNode; analyser: AnalyserNode } | null>(null);
   const voiceCallbackRef = useRef(onVoiceStateChange);
   voiceCallbackRef.current = onVoiceStateChange;
   const lastVoiceRef = useRef({ muted: isMuted, speaking: isSpeaking });
@@ -51,6 +52,15 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   const remoteAudioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analyserIntervalRef = useRef<number | null>(null);
   const latestPlayersRef = useRef<PlayerState[]>(players);
+  const stopCapture = useCallback(() => {
+    if (analyserIntervalRef.current) clearInterval(analyserIntervalRef.current);
+    analyserIntervalRef.current = null;
+    vadNodesRef.current?.source.disconnect();
+    vadNodesRef.current?.analyser.disconnect();
+    vadNodesRef.current = null;
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+  }, []);
 
   // Voice privacy: at night only the wolf pack hears each other; dead players are cut off entirely.
   const allowedPeerIds = useMemo(() => {
@@ -193,11 +203,10 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   // Dead players keep their microphone hard-muted
   useEffect(() => {
     if (localIsAlive) return;
-    localStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = false;
-    });
+    stopCapture();
+    setMicPermissionState('idle');
     if (!isMuted) onVoiceStateChange(true, false);
-  }, [localIsAlive, isMuted, onVoiceStateChange]);
+  }, [localIsAlive, isMuted, onVoiceStateChange, stopCapture]);
 
   // Expose WebRTC signaling handler on window so App WebSocket listener can route signals cleanly
   useEffect(() => {
@@ -249,15 +258,13 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (analyserIntervalRef.current) clearInterval(analyserIntervalRef.current);
-      void vadContextRef.current?.close().catch(() => {});
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      stopCapture();
       peersRef.current.forEach((pc) => pc.close());
       peersRef.current.clear();
       remoteAudioElsRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; });
       remoteAudioElsRef.current.clear();
     };
-  }, []);
+  }, [stopCapture]);
 
   const toggleMicrophone = useCallback(async () => {
     if (!localIsAlive || micStartingRef.current) return;
@@ -290,15 +297,12 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
         }
 
         // Set up voice activity detection (VAD)
-        const AudioCtx =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (AudioCtx) {
-          const audioCtx = new AudioCtx();
-          vadContextRef.current = audioCtx;
-          await audioCtx.resume();
+        // Share the game's context; the mic only feeds an analyser, never the speakers.
+        const audioCtx = soundEngine.getVoiceAnalysisContext();
+        if (audioCtx) {
           const source = audioCtx.createMediaStreamSource(stream);
           const analyser = audioCtx.createAnalyser();
+          vadNodesRef.current = { source, analyser };
           analyser.fftSize = 256;
           source.connect(analyser);
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -314,7 +318,8 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
           }, 220);
         }
       } catch {
-        localStreamRef.current?.getTracks().forEach((track) => { track.enabled = false; });
+        stopCapture();
+        setMicPermissionState('idle');
         reportVoiceState(true, false);
         if (mountedRef.current) setMicError('Không mở được mic. Hãy kiểm tra quyền micro và thiết bị âm thanh.');
       } finally {
@@ -324,13 +329,12 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     }
 
     if (micPermissionState === 'active' && localStreamRef.current) {
-      const nextMuted = !isMuted;
-      localStreamRef.current.getAudioTracks().forEach((t) => {
-        t.enabled = !nextMuted;
-      });
-      reportVoiceState(nextMuted, false);
+      // Release the hardware input when off; keep the game's shared output context alive.
+      stopCapture();
+      setMicPermissionState('idle');
+      reportVoiceState(true, false);
     }
-  }, [micPermissionState, isMuted, localIsAlive, reportVoiceState, wsRef]);
+  }, [micPermissionState, isMuted, localIsAlive, reportVoiceState, stopCapture, wsRef]);
 
   useEffect(() => {
     const onExternalToggle = () => {

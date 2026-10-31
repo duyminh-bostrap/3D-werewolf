@@ -703,7 +703,7 @@ async function startServer() {
         if (msg.type === 'room:join') {
           const roomCode = String(msg.roomCode || 'GOTHIC').toUpperCase();
           const playerId = String(msg.playerId || `p_${Math.random().toString(36).slice(2, 9)}`);
-          const playerName = String(msg.playerName || 'Lữ Khách Bí Ẩn').slice(0, 24);
+          const playerName = String(msg.playerName || 'Lữ Khách').slice(0, 24);
           const appearance: CharacterAppearance =
             msg.appearance || APPEARANCE_PRESETS[0];
 

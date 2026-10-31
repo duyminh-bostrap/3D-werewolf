@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachMicrophone, MICROPHONE_CONSTRAINTS } from './voiceCapture';
 
-test('microphone uses mono capture with browser echo/noise/gain processing', () => {
+test('microphone uses mono echo/noise processing without automatic gain boosts', () => {
   const audio = MICROPHONE_CONSTRAINTS.audio as MediaTrackConstraints;
   assert.deepEqual(audio.channelCount, { ideal: 1 });
   assert.equal(audio.echoCancellation, true);
   assert.equal(audio.noiseSuppression, true);
-  assert.equal(audio.autoGainControl, true);
+  assert.equal(audio.autoGainControl, false);
 });
 test('repeated microphone attachment never adds duplicate audio senders', async () => {
   const track = { kind: 'audio' } as MediaStreamTrack;

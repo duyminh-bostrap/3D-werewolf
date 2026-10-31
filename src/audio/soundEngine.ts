@@ -71,19 +71,23 @@ class GothicSoundEngine {
     }
   }
 
-  private ensureContext(): AudioContext | null {
-    if (this.isMuted || typeof window === 'undefined') return null;
+  private ensureContext(forVoice = false): AudioContext | null {
+    if ((!forVoice && this.isMuted) || typeof window === 'undefined') return null;
     if (!this.ctx) {
       const AudioCtx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return null;
-      this.ctx = new AudioCtx();
+      this.ctx = new AudioCtx({ latencyHint: 'balanced' });
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
     return this.ctx;
+  }
+
+  public getVoiceAnalysisContext(): AudioContext | null {
+    return this.ensureContext(true);
   }
 
   public setMuted(muted: boolean) {

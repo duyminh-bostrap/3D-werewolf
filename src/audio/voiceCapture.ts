@@ -1,5 +1,5 @@
 export const MICROPHONE_CONSTRAINTS: MediaStreamConstraints = {
-  audio: { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  audio: { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true, autoGainControl: false },
 };
 
 export async function attachMicrophone(pc: RTCPeerConnection, stream: MediaStream): Promise<void> {

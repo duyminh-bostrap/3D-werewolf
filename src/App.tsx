@@ -114,7 +114,7 @@ export default function App() {
   });
   const [hasCharacter, setHasCharacter] = useState(Boolean(savedCharacter));
 
-  const [playerName, setPlayerName] = useState<string>(savedCharacter?.name ?? 'Bá Tước Mặc Khải');
+  const [playerName, setPlayerName] = useState<string>(savedCharacter?.name ?? 'Lữ Khách');
   const [roomCode, setRoomCode] = useState<string>(initialRoomCode);
   const [appearance, setAppearance] = useState<CharacterAppearance>(
     () => ({ ...(savedCharacter?.appearance ?? APPEARANCE_PRESETS[0]) })
@@ -196,7 +196,7 @@ export default function App() {
   }, [savedCharacter, localPlayerId, hasChosenAccount]);
 
   const persistCharacter = useCallback((name: string, app: CharacterAppearance) => {
-    const character = { name: name.trim() || 'Lữ Khách Bí Ẩn', appearance: app };
+    const character = { name: name.trim() || 'Lữ Khách', appearance: app };
     try { saveCharacter(localStorage, character); if (supabase) localStorage.setItem('gothic_character_dirty', '1'); } catch { /* unavailable */ }
     setHasCharacter(true);
     const client = supabase;

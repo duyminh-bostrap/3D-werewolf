@@ -316,21 +316,21 @@ export function clampRoomPlayerCount(count: number): number {
 }
 
 export const BOT_NAMES = [
-  'Bá Tước Alistair',
-  'Phu Nhân Carmilla',
-  'Cha Xứ Solomon',
-  'Thợ Rèn Gideon',
-  'Tiểu Thư Lenore',
-  'Y Sĩ Corvus',
-  'Kẻ Đào Mộ Silas',
-  'Bà Đồng Vespera',
-  'Thuyền Trưởng Thorne',
-  'Hầu Tước Malakor',
-  'Nữ Tu Beatrice',
-  'Nhạc Sĩ Orpheus',
-  'Quản Gia Sebastian',
-  'Thợ Săn Viktor',
-  'Chiêm Tinh Gia Lyra',
+  'Alistair',
+  'Carmilla',
+  'Solomon',
+  'Gideon',
+  'Lenore',
+  'Corvus',
+  'Silas',
+  'Vespera',
+  'Thorne',
+  'Malakor',
+  'Beatrice',
+  'Orpheus',
+  'Sebastian',
+  'Viktor',
+  'Lyra',
 ];
 
 export interface RoleDeckConfig {
