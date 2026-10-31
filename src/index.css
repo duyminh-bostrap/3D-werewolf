@@ -30,6 +30,40 @@
   perspective: 1200px;
 }
 
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS auto-zooms focused form controls when their font is below 16px. */
+@media (pointer: coarse), (max-width: 767px) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: 16px;
+  }
+}
+
+.game-hud,
+.title-overlay,
+[role="dialog"].fixed.inset-0 {
+  top: var(--visible-top, 0px);
+  bottom: auto;
+  height: var(--visible-height, 100dvh);
+}
+
+[role="dialog"].fixed.inset-0 > div {
+  max-height: 100%;
+}
+
+.chat-drawer {
+  top: calc(var(--visible-top, 0px) + 56px);
+  bottom: auto;
+  height: max(120px, calc(var(--visible-height, 100dvh) - 68px));
+}
+
 .preserve-3d {
   transform-style: preserve-3d;
 }

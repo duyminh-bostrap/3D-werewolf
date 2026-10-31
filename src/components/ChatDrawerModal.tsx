@@ -58,7 +58,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
 
   return (
     <div
-      className="fixed top-14 sm:top-16 bottom-3 right-0 z-40 w-full sm:w-[400px] px-2.5 sm:px-4 pointer-events-auto flex flex-col"
+      className="chat-drawer fixed right-0 z-40 w-full sm:w-[400px] px-2.5 sm:px-4 pointer-events-auto flex flex-col"
       role="dialog"
       aria-modal="false"
       aria-label="Thanh Chat & Nhật Ký Làng"

@@ -201,7 +201,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-40 pointer-events-none flex flex-col justify-center p-3 sm:p-6 bg-gradient-to-b from-[#07060b]/85 via-[#07060b]/70 to-[#07060b]/92 overflow-y-auto">
+    <div className="title-overlay fixed inset-0 z-40 pointer-events-none flex flex-col justify-center p-3 sm:p-6 bg-gradient-to-b from-[#07060b]/85 via-[#07060b]/70 to-[#07060b]/92 overflow-y-auto">
       <div className="max-w-sm w-full mx-auto pointer-events-auto my-auto space-y-3">
         <div className="relative">
           <BrandMark />

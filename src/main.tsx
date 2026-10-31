@@ -1,6 +1,10 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { bindGameViewport } from './lib/viewport';
+
+const unbindViewport = bindGameViewport(window, document.documentElement);
+if (import.meta.hot) import.meta.hot.dispose(unbindViewport);
 
 const root = createRoot(document.getElementById('root')!);
 const isAuthCallback = new URLSearchParams(window.location.search).has('code') || /access_token=|error_description=/.test(window.location.hash);

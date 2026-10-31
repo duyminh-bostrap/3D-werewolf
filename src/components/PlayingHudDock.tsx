@@ -186,10 +186,14 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
     const observer = new ResizeObserver(update);
     observer.observe(dock);
     window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
     update();
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('scroll', update);
       document.documentElement.style.removeProperty('--game-controls-bottom');
     };
   }, []);
@@ -334,7 +338,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-2 sm:p-3">
+    <div className="game-hud fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-2 sm:p-3">
       {/* Headless WebRTC Voice Manager */}
       <WebRTCVoiceManager
         micVolume={micVolume}
