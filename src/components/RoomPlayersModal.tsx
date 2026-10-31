@@ -199,7 +199,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    disabled={players.length >= Math.min(MAX_ROOM_PLAYERS, targetSlots)}
+                    disabled={players.length >= MAX_ROOM_PLAYERS}
                     onClick={onAddBot}
                     title="Thêm AI"
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 disabled:opacity-40 border border-emerald-500/40 text-xs font-semibold text-emerald-200 cursor-pointer"

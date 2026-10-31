@@ -20,9 +20,10 @@ Server là nguồn quyết định duy nhất cho pha, thời hạn, quyền hà
 - Đủ phiếu ngày hoặc hết giờ: có bị cáo thì vào 30 giây biện minh, camera focus bị cáo và ánh sáng ngày → hoàng hôn. Không có bị cáo thì khóa phiếu, đếm 5 giây ngày → đêm.
 - Đủ phiếu Giết/Sống hoặc hết biện minh: khóa phiếu, đếm 5 giây hoàng hôn → đêm rồi tổng kết phiên xử. RPC chốt tay không còn hiệu lực. Reset hủy countdown đang chờ.
 - Chủ phòng được sửa bộ bài/số chỗ, thêm/bớt AI, kick và chuyển quyền trong lobby. Người khác chỉ xem bộ bài, kể cả chi tiết lá bài. Server kiểm tra quyền, không chỉ vô hiệu hóa nút.
-- Capacity vẫn 5–15; số thành viên thực tế có thể dưới 5 vì kick/rời phòng. Dưới 5 không được bắt đầu.
+- Capacity 5–20; số thành viên thực tế có thể dưới 5 vì kick/rời phòng. Chỉ bắt đầu khi số người bằng số chỗ và tất cả sẵn sàng. Người thật hoặc AI vượt cấu hình hiện tại tự nâng capacity lên bằng số người, không quá 20.
 - Khi hết ván/về lobby, popup và chat ẩn thông báo hệ thống; reset loại thông báo hệ thống ván cũ. Dọn trò chuyện chỉ ẩn lịch sử trên máy người bấm; tin mới tiếp tục hiện.
 - Chọn nhân vật dùng proxy sát thân và bảng tên; nhân vật local không chặn việc chọn người khác.
+- Cài đặt có slider nhạc/hiệu ứng 0–100%, lưu trên máy và giữ qua tải lại. Nhạc nền dùng mức theo pha nhân với slider; mọi hiệu ứng đi qua master gain chung. Nút tắt/bật giữ mức slider; giọng nói không bị slider này thay đổi.
 
 ## 2. Sơ đồ tổng thể
 
@@ -35,7 +36,7 @@ flowchart TD
   Exists -- Chưa --> Character[Tạo nhân vật lần đầu]
   Exists -- Có --> Rooms[Chọn phòng]
   Character --> Rooms
-  Rooms --> Lobby[Sảnh chờ / 5–15 người]
+  Rooms --> Lobby[Sảnh chờ / 5–20 người]
   Lobby --> Ready{Chủ phòng bắt đầu / đủ người / sẵn sàng}
   Ready -- Chưa --> Lobby
   Ready -- Đủ --> Reveal[Chia vai / xem lá bài riêng]
@@ -76,7 +77,7 @@ Hiện room/game ID và Supabase Auth ID là hai hệ nhận diện khác nhau; 
 
 - Tạo phòng mới hoặc nhập mã/link `?room=...`.
 - Phòng mới chỉ có người tạo, không tự sinh AI. Thay đổi số chỗ không tự thêm AI.
-- Giới hạn tuyệt đối 15 người/slot trong phòng; không chèn người thứ 16 qua join, thêm AI hoặc đổi số chỗ.
+- Giới hạn tuyệt đối 20 người/slot trong phòng; không chèn người thứ 21 qua join, thêm AI hoặc đổi số chỗ.
 - Số chỗ là sức chứa, không phải số bắt buộc phải lấp đầy trước khi bắt đầu. Không giảm sức chứa xuống dưới số người đang có.
 - Người vào lại cùng danh tính chiếm lại slot của mình, không tạo bản sao.
 - Chuẩn cần đạt: người mới vào giữa ván chỉ được chờ/quan sát, không được thêm vai trò hay tham gia bỏ phiếu vào ván đã chia bài. Mã hiện tại chưa bảo đảm điều này.
@@ -85,7 +86,7 @@ Hiện room/game ID và Supabase Auth ID là hai hệ nhận diện khác nhau; 
 
 - Người tạo/ người đầu tiên là chủ phòng; bảng tên có vương miện, cập nhật khi chuyển quyền.
 - Chỉ chủ phòng được bắt đầu, chỉnh sức chứa, AI, bộ bài, mời người rời phòng, chuyển chủ phòng và đặt lại ván.
-- Bắt đầu khi có ít nhất 5 và tối đa 15 người, không vượt sức chứa, mọi người ngoài chủ phòng đã sẵn sàng. Chủ phòng được tính là sẵn sàng.
+- Bắt đầu khi số thành viên bằng chính xác số chỗ đã cấu hình (5–20), mọi người ngoài chủ phòng đã sẵn sàng. Chủ phòng được tính là sẵn sàng.
 - UI khóa nút khi không đạt; server kiểm tra lại. Không chỉ dựa vào nút disabled.
 - AI chỉ thêm bằng thao tác rõ ràng của chủ phòng. AI thủ công hiện được tính là slot và sẵn sàng; muốn yêu cầu 5 người thật là một quyết định khác, chưa được áp dụng.
 - Về sảnh sau ván phải có lại trạng thái lobby: người sống, vai chưa chia, chưa có kết quả thắng, phiếu và hành động cũ không còn tác dụng.
@@ -213,7 +214,7 @@ Trường hợp không còn ai sống hiện rơi vào nhánh Dân Làng thắng
 Bảng kết quả chỉ hiển thị khi pha là `ended`, winner khác `ongoing`, và client đã tới trạng thái gameover. Không đọc dữ liệu lobby vừa reset thành một chiến thắng mới. Kết quả gồm phe thắng, lý do, số đêm thật và danh sách cuối ván.
 
 - Về sảnh: reset ván trên server, đợi trạng thái lobby; đóng kết quả, giữ tài khoản/nhân vật/danh bạ.
-- Chơi lại: chủ phòng reset về lobby rồi yêu cầu bắt đầu theo cùng điều kiện 5–15 người và sẵn sàng; không bỏ qua kiểm tra vì ván trước đã đủ người.
+- Chơi lại: chủ phòng reset về lobby rồi yêu cầu bắt đầu theo cùng điều kiện 5–20 người và sẵn sàng; không bỏ qua kiểm tra vì ván trước đã đủ người.
 - Rời phòng: ngắt socket và voice, dừng reconnect phòng cũ, về chọn phòng. Không tự đổi người rời thành AI.
 
 ## 11. Mất kết nối, tham gia lại và dữ liệu
@@ -230,10 +231,10 @@ Bảng kết quả chỉ hiển thị khi pha là `ended`, winner khác `ongoing
 
 | Sự kiện | Chủ thể hợp lệ | Điều kiện server cần kiểm tra |
 |---|---|---|
-| `room:join` | Người có danh tính hợp lệ | Phòng/capacity, reconnect, trạng thái ván; không quá 15 |
+| `room:join` | Người có danh tính hợp lệ | Phòng/capacity, reconnect, trạng thái ván; không quá 20 |
 | `player:toggle-ready` | Thành viên lobby | Chính mình, chưa bắt đầu |
 | `room:set-player-count`, add/remove bot, update-deck, kick/promote | Chủ phòng | Thành viên, quyền host, đúng pha, capacity |
-| `game:start` | Chủ phòng | Lobby, 5–15, mọi người ready, bộ bài hợp lệ |
+| `game:start` | Chủ phòng | Lobby, 5–20, mọi người ready, bộ bài hợp lệ |
 | `game:enter-night` | Thành viên có quyền xác nhận | Cần barrier xem bài riêng; không cho chuyển toàn phòng tùy ý |
 | `game:night-action` | Người sống có chức năng | Đúng đêm/vai/action, chưa chốt, mục tiêu tồn tại/còn sống, vật phẩm và hạn dùng |
 | `game:submit-vote` | Người sống trong ván | Pha ngày, mục tiêu sống hoặc skip |
@@ -250,9 +251,9 @@ Mỗi action xác nhận nên có phản hồi accepted/rejected, mã lỗi và 
 | F02 | Chơi khách; sửa nhân vật; reload không buộc tạo lại |
 | F03 | Link Google/Apple giữ nhân vật; đăng nhập tài khoản cũ không ghi đè hồ sơ cloud |
 | F04 | Tạo phòng có đúng 1 người; chỉnh capacity không tự thêm AI |
-| F05 | 4 người không bắt đầu; 5 người ready bắt đầu dù capacity 15 |
+| F05 | 4 người không bắt đầu; 5/8 không bắt đầu; 5/5 hoặc 20/20 ready mới bắt đầu |
 | F06 | Người chưa ready khóa start; non-host gửi start bị từ chối |
-| F07 | 15 slot: người thứ 16 và thêm AI đều bị từ chối; reconnect không tạo slot mới |
+| F07 | 20 slot: người thứ 21 và thêm AI đều bị từ chối; reconnect không tạo slot mới |
 | F08 | Host đổi/rời: vương miện và quyền chuyển đúng |
 | F09 | Một người chưa xem bài không bị người khác ép đóng bài |
 | F10 | Đêm: hai người cùng vai phải xác nhận riêng; chốt rồi không gửi lại |
@@ -313,6 +314,6 @@ npm run lint
 npm run build:prod
 ```
 
-Kiểm tra tích hợp phòng: chạy server riêng `PORT=3112`, rồi `node room-limits-test.cjs`. Script kiểm tra tạo 1 người không AI, chỉnh capacity không sinh AI, từ chối người thứ 16/thêm AI vượt giới hạn, dưới 5 không start và 5 ready có thể start.
+Kiểm tra tích hợp phòng: chạy server riêng `PORT=3112`, rồi `node room-limits-test.cjs`. Script kiểm tra tạo 1 người không AI, chỉnh capacity không sinh AI, từ chối người thứ 21/thêm AI vượt giới hạn, dưới 5 không start, 5/8 không start, 5/5 và 20/20 ready start được; thêm thành viên vượt cấu hình tự nâng capacity đến 20.
 
 Đợt rà soát tiếp theo: xem `ROLE_AUDIT.md`. Có kiểm tra 15 role, kiểm tra WebSocket với nhiều client, metadata chết ngày/đêm và recap nhiều đêm. Đây chưa phải nghiệm thu toàn bộ F01–F22; các P0 còn mở vẫn phải được giải quyết trước phát hành công khai.

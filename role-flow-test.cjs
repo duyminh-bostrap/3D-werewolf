@@ -18,6 +18,8 @@ async function match(overrides, count) {
     send(client, { type: 'room:join', playerId: client.id, playerName: `Player ${i}`, roomCode: room });
     await wait(() => client.state);
   }
+  send(group[0], { type: 'room:set-player-count', targetCount: count });
+  await wait(() => group[0].state.maxPlayers === count);
   const keys = ['werewolf', 'alpha_wolf', 'white_wolf', 'cursed_wolf', 'seer', 'aura_seer', 'bodyguard', 'witch', 'hunter', 'cupid', 'elder', 'little_girl', 'mayor', 'jester'];
   send(group[0], { type: 'room:update-deck', roleDeck: { ...Object.fromEntries(keys.map((key) => [key, 0])), ...overrides } });
   for (const client of group.slice(1)) send(client, { type: 'player:toggle-ready', isReady: true });

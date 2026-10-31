@@ -23,6 +23,8 @@ import type { CameraPreset, LightingStageMode } from '../three/GothicVillageScen
 interface SettingsModalProps {
   isOpen: boolean;
   isAudioMuted: boolean;
+  audioVolume: number;
+  onAudioVolumeChange: (volume: number) => void;
   isLobby: boolean;
   lightingOverride: LightingStageMode;
   onCycleLightingOverride: () => void;
@@ -43,6 +45,8 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   isAudioMuted,
+  audioVolume,
+  onAudioVolumeChange,
   isLobby,
   lightingOverride,
   onCycleLightingOverride,
@@ -103,6 +107,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <section className={section} aria-labelledby="settings-audio">
             <h3 id="settings-audio" className={heading}>Âm thanh</h3>
             <button type="button" onClick={onToggleAudioMute} aria-pressed={!isAudioMuted} className={row}><span className="flex items-center gap-3">{isAudioMuted ? <VolumeX className="h-4 w-4 text-slate-400" /> : <Volume2 className="h-4 w-4 text-emerald-300" />} Nhạc và hiệu ứng</span><span className={state}>{isAudioMuted ? 'Tắt' : 'Bật'}</span></button>
+            <label className="block rounded-xl border border-white/10 bg-[#1b1528] px-3.5 py-3">
+              <span className="mb-2 flex items-center justify-between text-xs text-slate-300"><span>Âm lượng nhạc và hiệu ứng</span><output className="font-mono-tabular text-amber-200">{Math.round(audioVolume * 100)}%</output></span>
+              <input type="range" aria-label="Âm lượng nhạc và hiệu ứng" min="0" max="100" step="1" value={Math.round(audioVolume * 100)} onChange={(e) => onAudioVolumeChange(Number(e.target.value) / 100)} className="h-7 w-full cursor-pointer accent-[#d4af37]" />
+            </label>
             <details className="rounded-xl border border-white/10 bg-[#1b1528]">
               <summary className="cursor-pointer px-3.5 py-3 text-sm text-slate-200">Phát âm thanh cho cả phòng</summary>
               <div className="grid grid-cols-1 gap-2 border-t border-white/10 p-3 sm:grid-cols-3">

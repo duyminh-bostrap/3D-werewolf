@@ -134,6 +134,17 @@ export default function App() {
   const [lightingOverride, setLightingOverride] = useState<'auto' | 'dusk' | 'night' | 'day'>('auto');
   const [isWerewolfNightVision, setIsWerewolfNightVision] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(() => {
+    try {
+      const saved = localStorage.getItem('gothic-game-volume');
+      const value = saved === null ? 1 : Number(saved);
+      return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+    } catch { return 1; }
+  });
+  useEffect(() => {
+    soundEngine.setVolume(audioVolume);
+    try { localStorage.setItem('gothic-game-volume', String(audioVolume)); } catch { /* Storage may be unavailable. */ }
+  }, [audioVolume]);
   const [isHudCollapsed, setIsHudCollapsed] = useState(false);
   const [showVirtualPad, setShowVirtualPad] = useState(true);
 
@@ -719,6 +730,8 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         isAudioMuted={isAudioMuted}
+        audioVolume={audioVolume}
+        onAudioVolumeChange={setAudioVolume}
         isLobby={roomState.phase === 'lobby'}
         lightingOverride={lightingOverride}
         onCycleLightingOverride={() => setLightingOverride((prev) => prev === 'auto' ? 'day' : prev === 'day' ? 'night' : prev === 'night' ? 'dusk' : 'auto')}

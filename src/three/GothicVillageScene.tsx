@@ -1242,7 +1242,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, targetFogDensity, colorLerp);
       }
 
-      // 5. Panoramic Full-Circle Tactical Camera Choreography (frames all 5-15 players clearly for easy selection)
+      // 5. Panoramic Full-Circle Tactical Camera Choreography (frames all 5-20 players clearly for easy selection)
       let activeOccludedIndices: number[] = [];
       let camLambda = 1 - Math.exp(-8.5 * dt);
 
@@ -1274,7 +1274,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         );
         _camLookAt.set(0, 3.2, -7.0);
       } else if (props.cameraPreset === 'overview') {
-        const radius = Math.max(19, 11 / Math.max(0.25, Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
+        const framingRadius = Math.max(11, 8.2 + Math.max(0, props.players.length - 10) * 0.22 + 1.6);
+        const radius = Math.max(19, framingRadius / Math.max(0.25, Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
         _camTargetPos.set(Math.sin(orbitYawOffset) * radius * 0.65, radius * 0.85, Math.cos(orbitYawOffset) * radius * 0.65);
         _camLookAt.set(0, 1, 0);
       } else if (props.cameraPreset === 'first') {

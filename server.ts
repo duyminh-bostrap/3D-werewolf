@@ -181,7 +181,7 @@ function getOrCreateRoom(roomCode: string): ServerRoom {
       winner: 'ongoing',
       winReason: '',
       logs: [
-        `Chào mừng đến Huyết Nguyệt Thôn (Phòng #${normalized}). Chủ phòng có thể chọn số người (5–15) và bộ bài Role trước khi bắt đầu!`,
+        `Chào mừng đến Huyết Nguyệt Thôn (Phòng #${normalized}). Chủ phòng có thể chọn số người (5–20) và bộ bài Role trước khi bắt đầu!`,
       ],
       messages: [],
       nightActions: createEmptyNightActions(),
@@ -275,6 +275,7 @@ function canHearVoice(room: ServerRoom, listenerId: string, speakerId: string): 
 }
 
 function broadcastRoomState(room: ServerRoom) {
+  if (room.phase === 'lobby') room.maxPlayers = clampRoomPlayerCount(Math.max(room.maxPlayers ?? MIN_ROOM_PLAYERS, room.players.length));
   const phaseKey = `${room.phase === 'day_voting' ? 'day_discussion' : room.phase}:${room.dayNumber}:${room.accusedPlayerId ?? ''}`;
   if (room.lastAnnouncedPhase !== phaseKey) {
     room.lastAnnouncedPhase = phaseKey;
@@ -710,8 +711,8 @@ async function startServer() {
           const room = getOrCreateRoom(roomCode);
           const existingPlayer = room.players.find((p) => p.id === playerId);
           const hasBotSeat = room.phase === 'lobby' && room.players.some((p) => p.isBot);
-          if (!existingPlayer && !hasBotSeat && room.players.length >= Math.min(MAX_ROOM_PLAYERS, room.maxPlayers ?? MAX_ROOM_PLAYERS)) {
-            ws.send(JSON.stringify({ type: 'room:error', message: 'Phòng đã đủ người (tối đa 15 người).' }));
+          if (!existingPlayer && !hasBotSeat && room.players.length >= MAX_ROOM_PLAYERS) {
+            ws.send(JSON.stringify({ type: 'room:error', message: 'Phòng đã đủ người (tối đa 20 người).' }));
             return;
           }
           if (currentRoomCode && currentRoomCode !== roomCode) {
@@ -936,7 +937,7 @@ async function startServer() {
 
           case 'room:add-bot': {
             if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
-            if (room.players.length < Math.min(MAX_ROOM_PLAYERS, room.maxPlayers ?? MAX_ROOM_PLAYERS)) {
+            if (room.players.length < MAX_ROOM_PLAYERS) {
               const usedNames = new Set(room.players.map((p) => p.name));
               const newBot = createBotPlayer(room.players.length, usedNames);
               room.players.push(newBot);

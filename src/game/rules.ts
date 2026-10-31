@@ -308,7 +308,7 @@ export const APPEARANCE_PRESETS: CharacterAppearance[] = [
 ];
 
 export const MIN_ROOM_PLAYERS = 5;
-export const MAX_ROOM_PLAYERS = 15;
+export const MAX_ROOM_PLAYERS = 20;
 
 export function clampRoomPlayerCount(count: number): number {
   if (!Number.isFinite(count)) return 8;
@@ -331,6 +331,11 @@ export const BOT_NAMES = [
   'Sebastian',
   'Viktor',
   'Lyra',
+  'Raven',
+  'Dorian',
+  'Elara',
+  'Lucian',
+  'Mira',
 ];
 
 export interface RoleDeckConfig {
@@ -368,7 +373,7 @@ export const DEFAULT_ROLE_DECK: RoleDeckConfig = {
 };
 
 /**
- * Returns a balanced recommended RoleDeckConfig tailored to the current room player count (5..15 players).
+ * Returns a balanced recommended RoleDeckConfig tailored to the current room player count (5..20 players).
  */
 export function getRecommendedRoleDeckForCount(playerCount: number): RoleDeckConfig {
   const n = clampRoomPlayerCount(playerCount);
@@ -576,9 +581,9 @@ export function validateLobbyStart(
   players: PlayerState[],
   maxPlayers: number
 ): LobbyStartValidation {
-  const requiredCount = MIN_ROOM_PLAYERS;
+  const requiredCount = clampRoomPlayerCount(maxPlayers);
   const currentCount = players.length;
-  const hasEnoughPlayers = currentCount >= MIN_ROOM_PLAYERS && currentCount <= Math.min(MAX_ROOM_PLAYERS, clampRoomPlayerCount(maxPlayers));
+  const hasEnoughPlayers = currentCount === requiredCount;
   const readyCount = players.filter((p) => p.isHost || p.isReady).length;
   const allPlayersReady = currentCount > 0 && readyCount === currentCount;
   const canStart = hasEnoughPlayers && allPlayersReady;
@@ -752,7 +757,7 @@ export function shuffleRoles(roles: RoleId[], rng: () => number = Math.random): 
 }
 
 /**
- * Computes circular seating around the central Gothic Bonfire (scales radius gently for 11..15 players).
+ * Computes circular seating around the central Gothic Bonfire (scales radius gently for 11..20 players).
  */
 export function getSeatTransform(
   seatIndex: number,

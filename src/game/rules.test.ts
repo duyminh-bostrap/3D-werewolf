@@ -165,13 +165,13 @@ test('computeJoystickVector clamps analog radius and applies deadzone', () => {
   assert.equal(fullRight.magnitude, 1);
 });
 
-test('getRecommendedRoleDeckForCount and clampRoleDeckToPlayerCount scale roles strictly for 5 to 15 players', () => {
+test('getRecommendedRoleDeckForCount and clampRoleDeckToPlayerCount scale roles strictly for 5 to 20 players', () => {
   assert.equal(MIN_ROOM_PLAYERS, 5);
-  assert.equal(MAX_ROOM_PLAYERS, 15);
+  assert.equal(MAX_ROOM_PLAYERS, 20);
   assert.equal(clampRoomPlayerCount(2), 5);
   assert.equal(clampRoomPlayerCount(15), 15);
-  assert.equal(clampRoomPlayerCount(20), 15);
-  assert.ok(BOT_NAMES.length >= 14, 'Should have at least 14 distinct bot names for a 15-player room');
+  assert.equal(clampRoomPlayerCount(21), 20);
+  assert.ok(new Set(BOT_NAMES).size >= 19, 'At least 19 distinct bot names for a 20-player room');
 
   for (let count = MIN_ROOM_PLAYERS; count <= MAX_ROOM_PLAYERS; count++) {
     const rec = getRecommendedRoleDeckForCount(count);
@@ -438,16 +438,19 @@ test('60s Night action progress, 180s Day blank vote nomination, and 30s Gallows
   assert.equal(executedVerdict.jesterWon, true);
 });
 
-test('lobby starts only with 5 to 15 players and everyone ready', () => {
+test('lobby starts only when the configured 5 to 20 seats are filled and everyone is ready', () => {
   const players = createMockPlayers(8);
   assert.equal(validateLobbyStart(players.slice(0, 4), 8).canStart, false);
-  assert.equal(validateLobbyStart(players.slice(0, 5), 8).canStart, true);
+  assert.equal(validateLobbyStart(players.slice(0, 5), 8).canStart, false);
+  assert.equal(validateLobbyStart(players.slice(0, 5), 5).canStart, true);
+  assert.equal(validateLobbyStart(players.slice(0, 5), 8).requiredCount, 8);
   players[1].isReady = false;
   assert.equal(validateLobbyStart(players, 8).canStart, false);
   players[1].isReady = true;
   assert.equal(validateLobbyStart(players, 8).canStart, true);
-  const tooMany = Array.from({ length: 16 }, (_, i) => ({ ...players[0], id: `p${i}` }));
-  assert.equal(validateLobbyStart(tooMany, 15).canStart, false);
+  const full = Array.from({ length: 20 }, (_, i) => ({ ...players[0], id: `p${i}` }));
+  assert.equal(validateLobbyStart(full, 20).canStart, true);
+  assert.equal(validateLobbyStart([...full, { ...players[0], id: 'extra' }], 20).canStart, false);
 });
 
 

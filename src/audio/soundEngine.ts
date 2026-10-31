@@ -6,6 +6,9 @@
 class GothicSoundEngine {
   private ctx: AudioContext | null = null;
   private isMuted = false;
+  private volume = 1;
+  private outputGain: GainNode | null = null;
+  private bgmLevel = 0.42;
   private ambientRunning = false;
   private droneOsc1: OscillatorNode | null = null;
   private droneOsc2: OscillatorNode | null = null;
@@ -22,7 +25,7 @@ class GothicSoundEngine {
     if (!this.bgmAudio) {
       const audio = new Audio('/assets/werewolf-ambient-loop.mp3');
       audio.loop = true;
-      audio.volume = this.isMuted ? 0 : 0.42;
+      audio.volume = this.isMuted ? 0 : this.bgmLevel * this.volume;
       audio.preload = 'auto';
 
       // Enforce custom sub-segment loop if configured (e.g. trimmed loop window)
@@ -79,6 +82,9 @@ class GothicSoundEngine {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return null;
       this.ctx = new AudioCtx({ latencyHint: 'balanced' });
+      this.outputGain = this.ctx.createGain();
+      this.outputGain.gain.value = this.isMuted ? 0 : this.volume;
+      this.outputGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
@@ -92,11 +98,12 @@ class GothicSoundEngine {
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
+    if (this.outputGain && this.ctx) this.outputGain.gain.setTargetAtTime(muted ? 0 : this.volume, this.ctx.currentTime, 0.04);
     if (this.ambientGain && this.ctx) {
       this.ambientGain.gain.setTargetAtTime(muted ? 0 : 0.08, this.ctx.currentTime, 0.15);
     }
     if (this.bgmAudio) {
-      this.bgmAudio.volume = muted ? 0 : 0.42;
+      this.bgmAudio.volume = muted ? 0 : this.bgmLevel * this.volume;
       if (muted) {
         this.bgmAudio.pause();
       } else {
@@ -109,13 +116,21 @@ class GothicSoundEngine {
     return this.isMuted;
   }
 
+  public setVolume(volume: number) {
+    if (!Number.isFinite(volume)) return;
+    this.volume = Math.max(0, Math.min(1, volume));
+    if (this.outputGain && this.ctx) this.outputGain.gain.setTargetAtTime(this.isMuted ? 0 : this.volume, this.ctx.currentTime, 0.04);
+    if (this.bgmAudio) this.bgmAudio.volume = this.isMuted ? 0 : this.bgmLevel * this.volume;
+  }
+
   /**
    * Starts the Gothic background music loop (/assets/werewolf-ambient-loop.mp3) + atmospheric wind.
    */
   public startAmbient(mode: 'night' | 'day' | 'lobby' = 'lobby') {
+    this.bgmLevel = mode === 'night' ? 0.48 : mode === 'day' ? 0.34 : 0.42;
     const bgm = this.ensureBgmAudio();
     if (bgm && !this.isMuted) {
-      bgm.volume = mode === 'night' ? 0.48 : mode === 'day' ? 0.34 : 0.42;
+      bgm.volume = this.bgmLevel * this.volume;
       if (bgm.paused) {
         bgm.play().catch(() => {});
       }
@@ -128,7 +143,7 @@ class GothicSoundEngine {
       this.ambientRunning = true;
       const master = ctx.createGain();
       master.gain.value = this.isMuted ? 0 : 0.08;
-      master.connect(ctx.destination);
+      master.connect(this.outputGain!);
       this.ambientGain = master;
 
       // Dark sub-bass pipe organ drone (D1 + A1 fifth)
@@ -244,7 +259,7 @@ class GothicSoundEngine {
     osc.connect(filter);
     sub.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(this.outputGain!);
 
     osc.start(now);
     sub.start(now);
@@ -276,7 +291,7 @@ class GothicSoundEngine {
       g.gain.exponentialRampToValueAtTime(0.0008, now + duration);
 
       osc.connect(g);
-      g.connect(ctx.destination);
+      g.connect(this.outputGain!);
       osc.start(now);
       osc.stop(now + duration + 0.05);
     });
@@ -310,7 +325,7 @@ class GothicSoundEngine {
     ng.gain.value = 0.18;
     noise.connect(filter);
     filter.connect(ng);
-    ng.connect(ctx.destination);
+    ng.connect(this.outputGain!);
     noise.start(now);
 
     // Chord sting
@@ -326,7 +341,7 @@ class GothicSoundEngine {
       g.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
 
       osc.connect(g);
-      g.connect(ctx.destination);
+      g.connect(this.outputGain!);
       osc.start(now + 0.12);
       osc.stop(now + 1.55);
     });
@@ -350,7 +365,7 @@ class GothicSoundEngine {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
 
     osc.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.outputGain!);
     osc.start(now);
     osc.stop(now + 0.45);
   }
@@ -374,7 +389,7 @@ class GothicSoundEngine {
       g.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.2);
 
       osc.connect(g);
-      g.connect(ctx.destination);
+      g.connect(this.outputGain!);
       osc.start(now + offset);
       osc.stop(now + offset + 0.22);
     });
@@ -399,7 +414,7 @@ class GothicSoundEngine {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
 
     osc.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.outputGain!);
     osc.start(now);
     osc.stop(now + 0.075);
   }
@@ -422,7 +437,7 @@ class GothicSoundEngine {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
 
     osc.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.outputGain!);
     osc.start(now);
     osc.stop(now + 0.17);
   }
@@ -444,7 +459,7 @@ class GothicSoundEngine {
     subGain.gain.setValueAtTime(0.24, now);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
     sub.connect(subGain);
-    subGain.connect(ctx.destination);
+    subGain.connect(this.outputGain!);
     sub.start(now);
     sub.stop(now + 0.25);
 
@@ -470,7 +485,7 @@ class GothicSoundEngine {
 
     noise.connect(filter);
     filter.connect(ng);
-    ng.connect(ctx.destination);
+    ng.connect(this.outputGain!);
     noise.start(now);
   }
 
@@ -494,7 +509,7 @@ class GothicSoundEngine {
       g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.38);
 
       osc.connect(g);
-      g.connect(ctx.destination);
+      g.connect(this.outputGain!);
       osc.start(now + i * 0.055);
       osc.stop(now + i * 0.055 + 0.4);
     });
@@ -517,7 +532,7 @@ class GothicSoundEngine {
     wg.gain.setValueAtTime(0.08, now);
     wg.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
     whoosh.connect(wg);
-    wg.connect(ctx.destination);
+    wg.connect(this.outputGain!);
     whoosh.start(now);
     whoosh.stop(now + 0.21);
 
@@ -531,7 +546,7 @@ class GothicSoundEngine {
     bg.gain.setValueAtTime(0.22, hitTime);
     bg.gain.exponentialRampToValueAtTime(0.001, hitTime + 0.16);
     bonk.connect(bg);
-    bg.connect(ctx.destination);
+    bg.connect(this.outputGain!);
     bonk.start(hitTime);
     bonk.stop(hitTime + 0.17);
   }
