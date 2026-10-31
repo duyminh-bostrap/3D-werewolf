@@ -1,9 +1,10 @@
+import { ChatChannelSelect, type ChatChannelProps } from './ChatChannelSelect';
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, ScrollText, Send, X, Sparkles, Moon, Skull, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '../../server';
 import { isWolfPackRole, type GamePhase, type PlayerState } from '../game/rules';
 
-interface ChatDrawerModalProps {
+interface ChatDrawerModalProps extends ChatChannelProps {
   isOpen: boolean;
   messages: ChatMessage[];
   logs: string[];
@@ -22,6 +23,7 @@ const QUICK_PHRASES = [
 ];
 
 export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
+  channels, channel, onChannelChange,
   isOpen,
   messages,
   logs,
@@ -36,7 +38,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
   const listEndRef = useRef<HTMLDivElement | null>(null);
 
   const isDead = !localPlayer.isAlive;
-  const isWolfChannel = phase === 'night' && isWolfPackRole(localPlayer.role) && !isDead;
+  const isWolfChannel = channel === 'wolves';
 
   useEffect(() => {
     if (isOpen) {
@@ -123,6 +125,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
           </button>
         </div>
 
+        <div className="px-3 py-2"><ChatChannelSelect channels={channels} channel={channel} onChannelChange={onChannelChange} /></div>
         {/* Body Content */}
         {tab === 'chat' ? (
           <>
@@ -148,7 +151,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                   )}
                 </div>
               ) : (
-                messages.map((m) => (
+                messages.filter(m => m.channel === channel || m.channel === 'system').map((m) => (
                   <div
                     key={m.id}
                     className={`rounded-xl border px-3 py-2 text-xs space-y-0.5 ${
@@ -159,9 +162,9 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <strong className="text-[#d4af37] font-semibold">{m.senderName}</strong>
-                      {m.channel === 'wolves' && (
+                      {(m.channel === 'wolves' || m.channel === 'cupid') && (
                         <span className="px-1.5 py-0.5 rounded bg-red-900/80 border border-red-500/40 text-[9px] font-bold text-red-200">
-                          SÓI · ĐÊM
+                          {m.channel === 'wolves' ? 'SÓI' : 'CUPID'}
                         </span>
                       )}
                     </div>
@@ -182,7 +185,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                   <button
                     key={idx}
                     type="button"
-                    disabled={isDead}
+                    disabled={isDead || !channels.length}
                     onClick={() => onSendChat(phrase)}
                     className="px-2.5 py-1 rounded-lg bg-[#1d172b] hover:bg-[#2a213d] border border-white/10 text-[11px] text-slate-200 whitespace-nowrap cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
@@ -202,7 +205,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                 data-testid="chat-drawer-input"
                 value={chatText}
                 onChange={(e) => setChatText(e.target.value)}
-                disabled={isDead}
+                disabled={isDead || !channels.length}
                 placeholder={
                   isDead
                     ? 'Đã chết — không thể nói'
@@ -210,12 +213,12 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
                     ? 'Nhắn riêng cho bầy sói...'
                     : 'Nhập lời biện hộ hoặc suy luận...'
                 }
-                className="flex-1 px-3 py-2.5 rounded-xl bg-[#09070e] border border-white/15 text-xs text-white focus:outline-none focus:border-[#d4af37] disabled:opacity-55 disabled:cursor-not-allowed"
+                className="flex-1 px-3 py-2.5 rounded-xl bg-[#09070e] border border-white/15 text-base text-white focus:outline-none focus:border-[#d4af37] disabled:opacity-55 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
                 data-testid="chat-drawer-send-btn"
-                disabled={isDead}
+                disabled={isDead || !channels.length}
                 aria-label="Gửi tin nhắn"
                 className="px-4 py-2.5 rounded-xl bg-[#9e1b24] hover:bg-[#b91c1c] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed"
               >

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachMicrophone, MICROPHONE_CONSTRAINTS } from './voiceCapture';
+import { attachMicrophone, MICROPHONE_CONSTRAINTS, microphoneConstraints } from './voiceCapture';
 
 test('microphone uses mono echo/noise processing without automatic gain boosts', () => {
   const audio = MICROPHONE_CONSTRAINTS.audio as MediaTrackConstraints;
@@ -8,6 +8,22 @@ test('microphone uses mono echo/noise processing without automatic gain boosts',
   assert.equal(audio.echoCancellation, true);
   assert.equal(audio.noiseSuppression, true);
   assert.equal(audio.autoGainControl, false);
+});
+
+test('iPhone and desktop-mode iPad bypass the WebKit voice-processing crackle path', () => {
+  for (const device of [
+    { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X)', platform: 'iPhone', maxTouchPoints: 5 },
+    { userAgent: 'Mozilla/5.0 Macintosh', platform: 'MacIntel', maxTouchPoints: 5 },
+  ]) {
+    const audio = microphoneConstraints(device).audio as MediaTrackConstraints;
+    assert.equal(audio.echoCancellation, false);
+    assert.equal(audio.noiseSuppression, false);
+    assert.equal(audio.autoGainControl, false);
+  }
+  for (const device of [
+    { userAgent: 'Android', platform: 'Linux', maxTouchPoints: 5 },
+    { userAgent: 'Macintosh', platform: 'MacIntel', maxTouchPoints: 0 },
+  ]) assert.equal(microphoneConstraints(device), MICROPHONE_CONSTRAINTS);
 });
 test('repeated microphone attachment never adds duplicate audio senders', async () => {
   const track = { kind: 'audio' } as MediaStreamTrack;

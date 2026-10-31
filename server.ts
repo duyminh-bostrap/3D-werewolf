@@ -1,3 +1,4 @@
+import { chatChannels, type ChatChannel } from './src/game/chatChannels';
 import { nightFeedback } from './src/game/nightFeedback';
 import { canUseVoice, canShareVoice } from './src/game/voiceChannel';
 import { deathNotice } from './src/game/deathNotifications';
@@ -55,7 +56,8 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   text: string;
-  channel: 'global' | 'wolves' | 'system' | 'dead';
+  channel: ChatChannel | 'system' | 'dead';
+  recipientIds?: string[];
   timestamp: number;
 }
 
@@ -227,7 +229,7 @@ function updateNightProgressFields(room: ServerRoom) {
 function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicState {
   updateNightProgressFields(room);
   const viewer = viewerId ? room.players.find((p) => p.id === viewerId) : undefined;
-  const visibleMessages = room.messages.filter((m) => canPlayerSeeMessage(viewer, m));
+  const visibleMessages = room.messages.filter((m) => canPlayerSeeMessage(viewer, m, room.phase));
   return {
     roomCode: room.roomCode,
     phase: room.phase,
@@ -237,7 +239,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     roleDeck: room.roleDeck,
     witchState: { ...(room.witchStates?.[viewerId ?? ''] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert },
     lastProtectedId: viewer?.role === 'bodyguard' ? room.lastProtectedByPlayer?.[viewer.id] ?? null : null,
-    lovers: room.lovers,
+    lovers: room.lovers ?? room.nightActions.cupidLovers,
     wolfTargetId: room.wolfTargetId,
     seerInspection: room.inspections?.[viewerId ?? ''] ?? null,
     littleGirlClue: room.littleGirlClues?.[viewerId ?? ''] ?? null,
@@ -263,9 +265,9 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
 /**
  * Wolf-night messages stay invisible to the village; everyone else sees global chat.
  */
-function canPlayerSeeMessage(viewer: PlayerState | undefined, msg: ChatMessage): boolean {
-  if (msg.channel === 'wolves') {
-    return Boolean(viewer && viewer.isAlive && isWolfPackRole(viewer.role));
+function canPlayerSeeMessage(viewer: PlayerState | undefined, msg: ChatMessage, phase: GamePhase): boolean {
+  if (msg.channel === 'wolves' || msg.channel === 'cupid') {
+    return Boolean(phase !== 'lobby' && viewer?.isAlive && msg.recipientIds?.includes(viewer.id));
   }
   return true;
 }
@@ -1311,16 +1313,17 @@ async function startServer() {
             const text = String(msg.text || '').trim().slice(0, 220);
             // Fallen players can no longer speak (and cannot leak info to the living)
             if (sender && sender.isAlive && text) {
-              // Channel is decided by the server so it cannot be spoofed by clients:
-              // wolves whispering at night go to the private wolf channel.
-              const channel: ChatMessage['channel'] =
-                room.phase === 'night' && isWolfPackRole(sender.role) ? 'wolves' : 'global';
+              const allowed = chatChannels(room.phase, sender, room.lovers ?? room.nightActions.cupidLovers);
+              const channel = (msg.channel ?? allowed[0]) as ChatChannel;
+              if (!allowed.includes(channel)) break;
+              const recipientIds = channel === 'global' ? undefined : room.players.filter(p => chatChannels(room.phase, p, room.lovers ?? room.nightActions.cupidLovers).includes(channel)).map(p => p.id);
               const chatMsg: ChatMessage = {
                 id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 senderId: sender.id,
                 senderName: sender.name,
                 text,
                 channel,
+                recipientIds,
                 timestamp: Date.now(),
               };
               room.messages.push(chatMsg);

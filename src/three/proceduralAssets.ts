@@ -1776,18 +1776,22 @@ function createCompactPlayerLabelSprite(
   }
   if (ready !== undefined) {
     const badgeCanvas = document.createElement('canvas');
-    badgeCanvas.width = 320; badgeCanvas.height = 44;
+    badgeCanvas.width = 48; badgeCanvas.height = 48;
     const badgeCtx = badgeCanvas.getContext('2d')!;
     badgeCtx.fillStyle = ready ? '#064e3b' : '#451a03';
-    badgeCtx.beginPath(); badgeCtx.roundRect(0, 0, 320, 44, 10); badgeCtx.fill();
-    badgeCtx.fillStyle = ready ? '#6ee7b7' : '#fde68a';
-    badgeCtx.font = '600 25px "Be Vietnam Pro", sans-serif';
-    badgeCtx.textAlign = 'center'; badgeCtx.textBaseline = 'middle';
-    badgeCtx.fillText(ready ? 'Đã sẵn sàng' : 'Chưa sẵn sàng', 160, 22);
+    badgeCtx.beginPath(); badgeCtx.arc(24, 24, 23, 0, Math.PI * 2); badgeCtx.fill();
+    badgeCtx.strokeStyle = ready ? '#6ee7b7' : '#fde68a';
+    badgeCtx.lineWidth = 4; badgeCtx.lineCap = 'round'; badgeCtx.lineJoin = 'round';
+    badgeCtx.beginPath();
+    if (ready) { badgeCtx.moveTo(12, 24); badgeCtx.lineTo(21, 33); badgeCtx.lineTo(36, 15); }
+    else { badgeCtx.arc(24, 24, 15, 0, Math.PI * 2); }
+    badgeCtx.stroke();
+    if (!ready) { badgeCtx.beginPath(); badgeCtx.moveTo(24, 14); badgeCtx.lineTo(24, 24); badgeCtx.lineTo(32, 28); badgeCtx.stroke(); }
     const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
     badgeTexture.colorSpace = THREE.SRGBColorSpace;
     const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture, transparent: true, fog: false, toneMapped: false, depthTest: true, depthWrite: false }));
-    badge.scale.set(0.85, 0.34, 1); badge.position.set(0, -0.72, 0.01);
+    badge.scale.set(0.16, 0.16 * sprite.scale.x / sprite.scale.y, 1);
+    badge.position.set(0.61, 0, 0.01);
     sprite.add(badge);
   }
   sprite.position.set(0, speech ? 3.08 + sprite.scale.y / 2 : 3.4, 0);

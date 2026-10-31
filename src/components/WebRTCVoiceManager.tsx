@@ -1,7 +1,7 @@
 import { canUseVoice, canShareVoice } from '../game/voiceChannel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
-import { attachMicrophone, MICROPHONE_CONSTRAINTS } from '../audio/voiceCapture';
+import { attachMicrophone, microphoneConstraints } from '../audio/voiceCapture';
 import { soundEngine } from '../audio/soundEngine';
 
 interface WebRTCVoiceManagerProps {
@@ -273,7 +273,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       micStartingRef.current = true;
       setMicError('');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(MICROPHONE_CONSTRAINTS);
+        const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
         if (!mountedRef.current || !aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
         localStreamRef.current = stream;
         setMicPermissionState('active');

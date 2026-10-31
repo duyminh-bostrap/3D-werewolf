@@ -1,3 +1,4 @@
+import { ChatChannelSelect, type ChatChannelProps } from './ChatChannelSelect';
 import { canUseVoice } from '../game/voiceChannel';
 import { loadFriends, saveFriend } from '../lib/friendsStore';
 import type { PhaseTransition } from '../game/phaseTransition';
@@ -48,7 +49,7 @@ import { WebRTCVoiceManager } from './WebRTCVoiceManager';
 import { soundEngine } from '../audio/soundEngine';
 import { renderRoleWoodcutSvg } from './RoleTarotModal';
 
-interface PlayingHudDockProps {
+interface PlayingHudDockProps extends ChatChannelProps {
   phaseTransition?: PhaseTransition | null;
   wsRef: React.MutableRefObject<WebSocket | null>;
   roomCode: string;
@@ -117,6 +118,7 @@ function formatCountdown(secondsLeft: number): string {
 
 export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   phaseTransition = null,
+  channels, channel, onChannelChange,
   wsRef,
   roomCode,
   phase,
@@ -558,7 +560,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
         </div>
       </div>
       {/* Bottom HUD Area: Ultra-Compact Icon-First Phase Bar + Mic/Chat Dock */}
-      <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
+      <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-[calc(100vw-16px)] sm:max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
         {nightFeedback && nightFeedback.id !== dismissedFeedback && phase !== 'lobby' && (
           <div role="status" aria-live="polite" data-testid="night-feedback" className="w-full max-w-sm rounded-xl border border-amber-300/50 bg-[#181324] p-3 shadow-xl">
             <div className="flex items-center justify-between gap-3">
@@ -909,7 +911,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
         )}
 
         {/* Bottom Dock */}
-        <div className="rounded-2xl bg-[#110d19]/95 border border-[#d4af37]/40 p-1.5 shadow-2xl flex items-center gap-1.5">
+        <div className="w-full rounded-2xl bg-[#110d19]/95 border border-[#d4af37]/40 p-1.5 shadow-2xl flex items-center gap-1.5">
           {/* Button 1: Mic Toggle (Icon-Only, No Text) */}
           <button
             type="button"
@@ -969,6 +971,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             <Zap className="w-4 h-4 shrink-0" />
           </button>
 
+          <ChatChannelSelect channels={channels} channel={channel} onChannelChange={onChannelChange} />
           {/* Inline Text Input ("Ô nhập text") + Send Button */}
           <form
             onSubmit={(e) => {
@@ -978,7 +981,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
               onSendChat(trimmed);
               setQuickChatInput('');
             }}
-            className="h-9 rounded-xl bg-[#1b1426] border border-white/15 focus-within:border-[#d4af37]/70 px-2 flex items-center gap-1.5"
+            className="min-w-0 flex-1 h-9 rounded-xl bg-[#1b1426] border border-white/15 focus-within:border-[#d4af37]/70 px-2 flex items-center gap-1.5"
           >
             <input
               type="text"
@@ -993,8 +996,8 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   ? 'Nhập tin nhắn...'
                   : 'Đã chết - không thể nói'
               }
-              disabled={!localPlayer.isAlive}
-              className="w-28 sm:w-44 bg-transparent text-xs text-white placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+              disabled={!localPlayer.isAlive || !channels.length}
+              className="min-w-0 w-full sm:w-44 bg-transparent text-base text-white placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"

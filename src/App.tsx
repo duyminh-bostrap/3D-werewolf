@@ -1,3 +1,4 @@
+import { chatChannels, type ChatChannel } from './game/chatChannels';
 import { visibleChatMessages } from './game/chatBubbles';
 import { shouldShowGameOver } from './game/gameOver';
 import { BrandMark } from './components/BrandMark';
@@ -459,6 +460,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shellState, isCustomizerOpen, isFriendsOpen, handleEnterVillage, sendWs, cycleCameraPreset, toggleAudio]);
 
+  const [preferredChatChannel, setPreferredChatChannel] = useState<ChatChannel>('global');
   const [clearedChatThrough, setClearedChatThrough] = useState(0);
   useEffect(() => setClearedChatThrough(0), [roomCode]);
   const chatMessages = visibleChatMessages(roomState.messages, roomState.phase, clearedChatThrough);
@@ -484,6 +486,10 @@ export default function App() {
       }
     );
   }, [roomState.players, localPlayerId, playerName, appearance]);
+
+  const channels = chatChannels(roomState.phase, localPlayer, roomState.lovers);
+  const channel = channels.includes(preferredChatChannel) ? preferredChatChannel : channels[0] ?? 'global';
+  const channelProps = { channels, channel, onChannelChange: setPreferredChatChannel };
 
   const handleLocalMove = useCallback(
     (x: number, z: number, rotY: number) => {
@@ -640,6 +646,7 @@ export default function App() {
       {/* Playing HUD & Streamlined Ritual Action Bar */}
       {shellState !== 'title' && (
         <PlayingHudDock
+          {...channelProps}
           wsRef={wsRef}
           roomCode={roomState.roomCode}
           phase={roomState.phase}
@@ -704,7 +711,7 @@ export default function App() {
           onSubmitDayVote={(targetId) => sendWs({ type: 'game:submit-vote', targetId })}
           onSubmitTrialVote={(choice) => sendWs({ type: 'game:submit-trial-vote', choice })}
 
-          onSendChat={(text) => sendWs({ type: 'chat:send', text })}
+          onSendChat={(text) => { if (channels.length) sendWs({ type: 'chat:send', text, channel }); }}
           onVoiceStateChange={(isMuted, isSpeaking) => {
             setRoomState((prev) => ({
               ...prev,
@@ -719,13 +726,14 @@ export default function App() {
 
       {/* 1. Thanh Chat Riêng: Dedicated Slide-Over Chat & Chronicle Drawer */}
       <ChatDrawerModal
+        {...channelProps}
         onClearConversation={() => setClearedChatThrough(Math.max(0, ...roomState.messages.map((m) => m.timestamp)))}
         isOpen={isChatDrawerOpen}
         messages={chatMessages}
         logs={roomState.logs}
         phase={roomState.phase}
         localPlayer={localPlayer}
-        onSendChat={(text) => sendWs({ type: 'chat:send', text })}
+        onSendChat={(text) => { if (channels.length) sendWs({ type: 'chat:send', text, channel }); }}
         onClose={() => setIsChatDrawerOpen(false)}
       />
 
