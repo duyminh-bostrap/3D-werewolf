@@ -51,6 +51,7 @@ import { renderRoleWoodcutSvg } from './RoleTarotModal';
 
 interface PlayingHudDockProps extends ChatChannelProps {
   phaseTransition?: PhaseTransition | null;
+  micVolume: number;
   wsRef: React.MutableRefObject<WebSocket | null>;
   roomCode: string;
   phase: GamePhase;
@@ -119,6 +120,7 @@ function formatCountdown(secondsLeft: number): string {
 export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   phaseTransition = null,
   channels, channel, onChannelChange,
+  micVolume,
   wsRef,
   roomCode,
   phase,
@@ -335,6 +337,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
     <div className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-2 sm:p-3">
       {/* Headless WebRTC Voice Manager */}
       <WebRTCVoiceManager
+        micVolume={micVolume}
         wsRef={wsRef}
         localPlayerId={localPlayer.id}
         players={players}

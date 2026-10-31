@@ -1,7 +1,7 @@
 import { canUseVoice, canShareVoice } from '../game/voiceChannel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
-import { attachMicrophone, microphoneConstraints } from '../audio/voiceCapture';
+import { attachMicrophone, microphoneConstraints, amplifyMicrophone } from '../audio/voiceCapture';
 import { soundEngine } from '../audio/soundEngine';
 
 interface WebRTCVoiceManagerProps {
@@ -11,6 +11,7 @@ interface WebRTCVoiceManagerProps {
   phase: GamePhase;
   localRole: RoleId;
   localIsAlive: boolean;
+  micVolume: number;
   isMuted: boolean;
   isSpeaking: boolean;
   onVoiceStateChange: (isMuted: boolean, isSpeaking: boolean) => void;
@@ -27,6 +28,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   phase,
   localRole,
   localIsAlive,
+  micVolume,
   isMuted,
   isSpeaking,
   onVoiceStateChange,
@@ -49,6 +51,11 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   }, []);
   const [spatialAudioEnabled, setSpatialAudioEnabled] = useState(true);
 
+  const micProcessorRef = useRef<ReturnType<typeof amplifyMicrophone> | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
+  const micVolumeRef = useRef(micVolume);
+  micVolumeRef.current = micVolume;
+  useEffect(() => { micProcessorRef.current?.setVolume(micVolume); }, [micVolume]);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const remoteAudioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -62,6 +69,10 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     vadNodesRef.current = null;
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
+    micProcessorRef.current?.stop();
+    micProcessorRef.current = null;
+    rawStreamRef.current?.getTracks().forEach(track => track.stop());
+    rawStreamRef.current = null;
   }, []);
 
   // Voice privacy: at night only the wolf pack hears each other; dead players are cut off entirely.
@@ -273,8 +284,13 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       micStartingRef.current = true;
       setMicError('');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
-        if (!mountedRef.current || !aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
+        const rawStream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
+        if (!mountedRef.current || !aliveRef.current) { rawStream.getTracks().forEach((track) => track.stop()); return; }
+        rawStreamRef.current = rawStream;
+        const context = soundEngine.getVoiceAnalysisContext();
+        if (!context) throw new Error('Web Audio unavailable');
+        micProcessorRef.current = amplifyMicrophone(context, rawStream, micVolumeRef.current);
+        const stream = micProcessorRef.current.stream;
         localStreamRef.current = stream;
         setMicPermissionState('active');
         reportVoiceState(false, false);

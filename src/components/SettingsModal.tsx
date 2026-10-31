@@ -3,6 +3,7 @@ import { SOCIAL_LOGIN_ENABLED } from '../lib/socialAuth';
 import React from 'react';
 import {
   Settings,
+  Mic,
   Volume2,
   VolumeX,
   Camera,
@@ -23,6 +24,8 @@ import type { CameraPreset, LightingStageMode } from '../three/GothicVillageScen
 interface SettingsModalProps {
   isOpen: boolean;
   isAudioMuted: boolean;
+  micVolume: number;
+  onMicVolumeChange: (volume: number) => void;
   audioVolume: number;
   onAudioVolumeChange: (volume: number) => void;
   isLobby: boolean;
@@ -44,6 +47,8 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   isAudioMuted,
+  micVolume,
+  onMicVolumeChange,
   audioVolume,
   onAudioVolumeChange,
   isLobby,
@@ -107,6 +112,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <label className="block rounded-xl border border-white/10 bg-[#1b1528] px-3.5 py-3">
               <span className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-100"><span className="flex items-center gap-2">{isAudioMuted ? <VolumeX className="h-4 w-4 text-slate-400" /> : <Volume2 className="h-4 w-4 text-emerald-300" />} Nhạc và hiệu ứng</span><output className="font-mono-tabular text-xs text-amber-200">{isAudioMuted ? 'Tắt · 0%' : `${Math.round(audioVolume * 100)}%`}</output></span>
               <input type="range" aria-label="Âm lượng nhạc và hiệu ứng" min="0" max="100" step="1" value={Math.round(audioVolume * 100)} onChange={(e) => onAudioVolumeChange(Number(e.target.value) / 100)} className="h-7 w-full cursor-pointer accent-[#d4af37]" />
+            </label>
+            <label className="block rounded-xl border border-white/10 bg-[#1b1528] px-3.5 py-3">
+              <span className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-100"><span className="flex items-center gap-2"><Mic className="h-4 w-4 text-emerald-300" /> Âm lượng mic</span><output className="font-mono-tabular text-xs text-amber-200">{Math.round(micVolume * 100)}%</output></span>
+              <input type="range" aria-label="Âm lượng mic" min="0" max="300" step="10" value={Math.round(micVolume * 100)} onChange={e => onMicVolumeChange(Number(e.target.value) / 100)} className="w-full accent-[#d4af37]" />
+              <span className="mt-1 block text-xs leading-relaxed text-slate-400">Mức tiếng bạn gửi đi. Thử 150–200% nếu mic nhỏ; 0% là im tiếng. Bật mic để áp dụng.</span>
             </label>
             <details className="rounded-xl border border-white/10 bg-[#1b1528]">
               <summary className="cursor-pointer px-3.5 py-3 text-sm text-slate-200">Phát âm thanh cho cả phòng</summary>

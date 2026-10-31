@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachMicrophone, MICROPHONE_CONSTRAINTS, microphoneConstraints } from './voiceCapture';
+import { attachMicrophone, MICROPHONE_CONSTRAINTS, microphoneConstraints, clampMicVolume } from './voiceCapture';
+
+test('mic volume clamps persisted and slider values to a finite 0–300% range', () => {
+  assert.equal(clampMicVolume(-1), 0);
+  assert.equal(clampMicVolume(0), 0);
+  assert.equal(clampMicVolume(2), 2);
+  assert.equal(clampMicVolume(4), 3);
+  assert.equal(clampMicVolume(NaN), 1);
+});
 
 test('microphone uses mono echo/noise processing without automatic gain boosts', () => {
   const audio = MICROPHONE_CONSTRAINTS.audio as MediaTrackConstraints;

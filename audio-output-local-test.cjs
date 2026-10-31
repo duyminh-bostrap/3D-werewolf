@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 // Run after build:prod with the local production server on port 3112.
 const fixture = `
 import {soundEngine} from './src/audio/soundEngine';
+import {amplifyMicrophone} from './src/audio/voiceCapture';
 const NativeAudio = window.Audio, NativeContext = window.AudioContext;
 window.Audio = function(...args) {
   const audio = new NativeAudio(...args);
@@ -66,6 +67,29 @@ window.measureAudio = async () => {
     soundEngine.setVolume(1);
   }
   soundEngine.setMuted(true);
+  const ctx = window.audioContext;
+  const tone = ctx.createOscillator(), quiet = ctx.createGain(), raw = ctx.createMediaStreamDestination();
+  quiet.gain.value = 0.01;
+  tone.connect(quiet).connect(raw);
+  const input = ctx.createAnalyser(), output = ctx.createAnalyser();
+  quiet.connect(input);
+  const mic = amplifyMicrophone(ctx, raw.stream, 1);
+  const received = ctx.createMediaStreamSource(mic.stream);
+  received.connect(output);
+  tone.start();
+  try {
+    for (const volume of [1,1.5,2,3,0]) {
+      mic.setVolume(volume);
+      await wait(650);
+      const before = rms(input), after = rms(output);
+      results.push({kind:'outgoing mic',volume,before,after,ratio:after/before});
+    }
+  } finally {
+    tone.stop(); tone.disconnect(); quiet.disconnect(); raw.disconnect();
+    raw.stream.getTracks().forEach(track=>track.stop());
+    received.disconnect(); input.disconnect(); output.disconnect(); mic.stop();
+    if(mic.stream.getTracks().some(track=>track.readyState!=='ended')) throw Error('Processed mic track still live');
+  }
   return results;
 };`;
 
@@ -93,12 +117,15 @@ window.measureAudio = async () => {
     await new Promise(r=>setTimeout(r,500));
     const result=await call('Runtime.evaluate',{expression:'window.measureAudio()',awaitPromise:true,returnByValue:true});
     assert.equal(result.exceptionDetails,undefined,JSON.stringify(result.exceptionDetails));
+    const micBaseline = result.result.value.find(row => row.kind === 'outgoing mic' && row.volume === 1)?.ratio ?? 1;
     for(const row of result.result.value) {
       assert.ok(row.before>0.0001,`${row.kind}: no input signal`);
-      assert.ok(Math.abs(row.ratio-row.volume)<0.03,JSON.stringify(row));
-      console.log(`${row.kind}: slider ${row.volume*100}% -> measured ${(row.ratio*100).toFixed(2)}% amplitude`);
+      // Browser compressors apply makeup gain; compare mic levels to the 100% baseline.
+      const measured = row.ratio / (row.kind === 'outgoing mic' ? micBaseline : 1);
+      assert.ok(Math.abs(measured-row.volume)<0.03,JSON.stringify(row));
+      console.log(`${row.kind}: slider ${row.volume*100}% -> measured ${(measured*100).toFixed(2)}% amplitude`);
     }
-    console.log('PASS: real MP3 and synthesized effects respond to master gain even when HTML volume writes are ignored.');
+    console.log('PASS: real music/effects volume and outgoing microphone amplification including zero and track cleanup.');
     await call('Browser.close');
   } finally {
     ws?.close();edge.kill();

@@ -1,3 +1,4 @@
+import { clampMicVolume } from './audio/voiceCapture';
 import { chatChannels, type ChatChannel } from './game/chatChannels';
 import { visibleChatMessages } from './game/chatBubbles';
 import { shouldShowGameOver } from './game/gameOver';
@@ -136,6 +137,10 @@ export default function App() {
   const [lightingOverride, setLightingOverride] = useState<'auto' | 'dusk' | 'night' | 'day'>('auto');
   const [isWerewolfNightVision, setIsWerewolfNightVision] = useState(false);
 
+  const [micVolume, setMicVolume] = useState(() => {
+    try { const saved = localStorage.getItem('gothic-mic-volume'); return saved === null ? 1 : clampMicVolume(Number(saved)); } catch { return 1; }
+  });
+  useEffect(() => { try { localStorage.setItem('gothic-mic-volume', String(micVolume)); } catch {} }, [micVolume]);
   const [audioVolume, setAudioVolume] = useState(() => {
     try {
       const saved = localStorage.getItem('gothic-game-volume');
@@ -646,6 +651,7 @@ export default function App() {
       {/* Playing HUD & Streamlined Ritual Action Bar */}
       {shellState !== 'title' && (
         <PlayingHudDock
+          micVolume={micVolume}
           {...channelProps}
           wsRef={wsRef}
           roomCode={roomState.roomCode}
@@ -739,6 +745,8 @@ export default function App() {
 
       {/* 2. Setting Riêng: Dedicated Settings & Horror Soundboard Modal */}
       <SettingsModal
+        micVolume={micVolume}
+        onMicVolumeChange={(value) => setMicVolume(clampMicVolume(value))}
         isOpen={isSettingsOpen}
         isAudioMuted={isAudioMuted}
         audioVolume={audioVolume}
