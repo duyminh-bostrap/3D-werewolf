@@ -43,6 +43,12 @@ Luật hiện có cần chủ sản phẩm chốt nếu muốn đổi: Sói Tr�
 
 Chưa kiểm tra hiệu ứng trên điện thoại thật, một ván người thật có voice, hoặc OAuth Google/Apple.
 
+## Kiểm tra âm lượng thực và bot chat
+
+`audio-output-local-test.cjs` chạy local với MP3 thật và hiệu ứng tổng hợp thật trong AudioContext. Đo RMS trước/sau master gain tại 100/50/25/0%, đồng thời giả lập HTML audio không cho chỉnh volume: cả nhạc và hiệu ứng đo được lần lượt 100/50/25/0% biên độ. Không chỉ kiểm tra giá trị slider. UI mobile local xác nhận 0% hiện Tắt và pause nhạc; kéo 50% phát MP3 lại, master gain 0,5 và đầu ra có tín hiệu.
+
+`bot-chat-local-test.cjs` xác nhận 4 bot sống đều gửi chat global trong ngày và timer chat đang chờ bị hủy khi reset lobby. `botChat.test.ts` kiểm tra bot chết/người thật không tự gửi lời bot, và chỉ bot bị cáo gửi biện minh. Chưa xác nhận loa/iPhone vật lý.
+
 ## Kiểm tra bổ sung chuyển pha, phòng và mic
 
 Countdown do server quyết định, dài 5 giây và khóa lựa chọn. Đã kiểm tra nhiều kết nối cho đêm→ngày, biện minh→đêm, bỏ phiếu trắng→đêm và reset giữa countdown. Cảnh 3D đã render các mốc đêm/bình minh/ngày/biện minh/đêm xuống trong Edge; chưa nghe thử mic trên phần cứng thật.

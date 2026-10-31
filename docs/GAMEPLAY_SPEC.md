@@ -23,7 +23,8 @@ Server là nguồn quyết định duy nhất cho pha, thời hạn, quyền hà
 - Capacity 5–20; số thành viên thực tế có thể dưới 5 vì kick/rời phòng. Chỉ bắt đầu khi số người bằng số chỗ và tất cả sẵn sàng. Người thật hoặc AI vượt cấu hình hiện tại tự nâng capacity lên bằng số người, không quá 20.
 - Khi hết ván/về lobby, popup và chat ẩn thông báo hệ thống; reset loại thông báo hệ thống ván cũ. Dọn trò chuyện chỉ ẩn lịch sử trên máy người bấm; tin mới tiếp tục hiện.
 - Chọn nhân vật dùng proxy sát thân và bảng tên; nhân vật local không chặn việc chọn người khác.
-- Cài đặt có slider nhạc/hiệu ứng 0–100%, lưu trên máy và giữ qua tải lại. Nhạc nền dùng mức theo pha nhân với slider; mọi hiệu ứng đi qua master gain chung. Nút tắt/bật giữ mức slider; giọng nói không bị slider này thay đổi.
+- Cài đặt có một khung slider nhạc/hiệu ứng 0–100%, lưu trên máy và giữ qua tải lại. 0% tương đương tắt; kéo lên bật lại. Nhạc MP3 nối qua MediaElementAudioSourceNode → gain theo pha → master gain, chung đầu ra với hiệu ứng; không dựa vào HTMLMediaElement.volume. Giọng nói không bị slider này thay đổi.
+- Bot sống lần lượt gửi chat công khai trong thảo luận ban ngày, mỗi bot một lượt/pha, cách nhau 4,2 giây. Bot bị đề cử gửi lời biện minh khi vào trial. Tin nhắn chỉ dựa vào tên, người sống/chết và phiếu công khai; không dùng role bí mật. Countdown/reset/kết thúc pha hủy lịch chat.
 
 ## 2. Sơ đồ tổng thể
 

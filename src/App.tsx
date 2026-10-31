@@ -133,7 +133,7 @@ export default function App() {
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('follow');
   const [lightingOverride, setLightingOverride] = useState<'auto' | 'dusk' | 'night' | 'day'>('auto');
   const [isWerewolfNightVision, setIsWerewolfNightVision] = useState(false);
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
+
   const [audioVolume, setAudioVolume] = useState(() => {
     try {
       const saved = localStorage.getItem('gothic-game-volume');
@@ -141,8 +141,13 @@ export default function App() {
       return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
     } catch { return 1; }
   });
+  const isAudioMuted = audioVolume === 0;
+  const lastAudibleVolume = useRef(audioVolume || 1);
+  const toggleAudio = useCallback(() => setAudioVolume((current) => current === 0 ? lastAudibleVolume.current : 0), []);
   useEffect(() => {
+    if (audioVolume > 0) lastAudibleVolume.current = audioVolume;
     soundEngine.setVolume(audioVolume);
+    soundEngine.setMuted(audioVolume === 0);
     try { localStorage.setItem('gothic-game-volume', String(audioVolume)); } catch { /* Storage may be unavailable. */ }
   }, [audioVolume]);
   const [isHudCollapsed, setIsHudCollapsed] = useState(false);
@@ -442,11 +447,7 @@ export default function App() {
       } else if (e.code === 'KeyV') {
         cycleCameraPreset();
       } else if (e.code === 'KeyM') {
-        setIsAudioMuted((prev) => {
-          const next = !prev;
-          soundEngine.setMuted(next);
-          return next;
-        });
+        toggleAudio();
       } else if (e.code === 'KeyR') {
         sendWs({ type: 'game:reset-lobby' });
         setShellState('playing');
@@ -455,7 +456,7 @@ export default function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [shellState, isCustomizerOpen, isFriendsOpen, handleEnterVillage, sendWs, cycleCameraPreset]);
+  }, [shellState, isCustomizerOpen, isFriendsOpen, handleEnterVillage, sendWs, cycleCameraPreset, toggleAudio]);
 
   const [clearedChatThrough, setClearedChatThrough] = useState(0);
   useEffect(() => setClearedChatThrough(0), [roomCode]);
@@ -739,11 +740,7 @@ export default function App() {
         cameraPreset={cameraPreset}
         showVirtualPad={showVirtualPad}
         isHudCollapsed={isHudCollapsed}
-        onToggleAudioMute={() => {
-          const next = !isAudioMuted;
-          setIsAudioMuted(next);
-          soundEngine.setMuted(next);
-        }}
+
         onChangeCameraPreset={(preset) => { if (preset === 'first' || preset === 'follow') previousCameraRef.current = preset; setCameraPreset(preset); }}
         onToggleVirtualPad={() => setShowVirtualPad((v) => !v)}
         onToggleHudCollapse={() => setIsHudCollapsed((v) => !v)}

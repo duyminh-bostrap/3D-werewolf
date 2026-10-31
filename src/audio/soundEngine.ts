@@ -15,6 +15,8 @@ class GothicSoundEngine {
   private windNode: AudioNode | null = null;
   private ambientGain: GainNode | null = null;
   private bgmAudio: HTMLAudioElement | null = null;
+  private bgmSource: MediaElementAudioSourceNode | null = null;
+  private bgmGain: GainNode | null = null;
   private bgmLoopStart = 0;
   private bgmLoopEnd = 0; // 0 means full track loop
   private unlockBound = false;
@@ -25,7 +27,6 @@ class GothicSoundEngine {
     if (!this.bgmAudio) {
       const audio = new Audio('/assets/werewolf-ambient-loop.mp3');
       audio.loop = true;
-      audio.volume = this.isMuted ? 0 : this.bgmLevel * this.volume;
       audio.preload = 'auto';
 
       // Enforce custom sub-segment loop if configured (e.g. trimmed loop window)
@@ -39,6 +40,16 @@ class GothicSoundEngine {
       });
 
       this.bgmAudio = audio;
+    }
+
+    if (!this.bgmSource) {
+      const ctx = this.ensureContext(true);
+      if (!ctx) return null;
+      this.bgmSource = ctx.createMediaElementSource(this.bgmAudio);
+      this.bgmGain = ctx.createGain();
+      this.bgmGain.gain.value = this.bgmLevel;
+      this.bgmSource.connect(this.bgmGain);
+      this.bgmGain.connect(this.outputGain!);
     }
 
     if (!this.unlockBound) {
@@ -103,7 +114,6 @@ class GothicSoundEngine {
       this.ambientGain.gain.setTargetAtTime(muted ? 0 : 0.08, this.ctx.currentTime, 0.15);
     }
     if (this.bgmAudio) {
-      this.bgmAudio.volume = muted ? 0 : this.bgmLevel * this.volume;
       if (muted) {
         this.bgmAudio.pause();
       } else {
@@ -120,7 +130,6 @@ class GothicSoundEngine {
     if (!Number.isFinite(volume)) return;
     this.volume = Math.max(0, Math.min(1, volume));
     if (this.outputGain && this.ctx) this.outputGain.gain.setTargetAtTime(this.isMuted ? 0 : this.volume, this.ctx.currentTime, 0.04);
-    if (this.bgmAudio) this.bgmAudio.volume = this.isMuted ? 0 : this.bgmLevel * this.volume;
   }
 
   /**
@@ -129,8 +138,8 @@ class GothicSoundEngine {
   public startAmbient(mode: 'night' | 'day' | 'lobby' = 'lobby') {
     this.bgmLevel = mode === 'night' ? 0.48 : mode === 'day' ? 0.34 : 0.42;
     const bgm = this.ensureBgmAudio();
+    if (this.bgmGain && this.ctx) this.bgmGain.gain.setTargetAtTime(this.bgmLevel, this.ctx.currentTime, 0.04);
     if (bgm && !this.isMuted) {
-      bgm.volume = this.bgmLevel * this.volume;
       if (bgm.paused) {
         bgm.play().catch(() => {});
       }

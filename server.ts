@@ -7,6 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { phaseNotice } from './src/game/phaseNotice';
 import { environmentStage, PHASE_TRANSITION_MS, type PhaseTransition } from './src/game/phaseTransition';
 import { littleGirlHint, validNightChoice } from './src/game/nightAction';
+import { botChatText } from './src/game/botChat';
 import { createServer as createViteServer } from 'vite';
 import {
   APPEARANCE_PRESETS,
@@ -96,6 +97,7 @@ interface ServerRoom extends RoomPublicState {
   nightActions: NightActionsInput;
   clients: Map<string, WebSocket>;
   botAutoActTimer?: ReturnType<typeof setTimeout> | null;
+  botChatTimer?: ReturnType<typeof setTimeout> | null;
   autoAdvanceTimer?: ReturnType<typeof setTimeout> | null;
 }
 
@@ -145,6 +147,10 @@ function createBotPlayer(seatIndex: number, existingNames: Set<string> = new Set
 }
 
 function clearRoomTimers(room: ServerRoom) {
+  if (room.botChatTimer) {
+    clearTimeout(room.botChatTimer);
+    room.botChatTimer = null;
+  }
   if (room.botAutoActTimer) {
     clearTimeout(room.botAutoActTimer);
     room.botAutoActTimer = null;
@@ -465,6 +471,26 @@ function announceDeath(room: ServerRoom, player: PlayerState, period: 'day' | 'n
   room.messages.push({ id: `death_${Date.now()}_${player.id}`, senderId: 'system', senderName: 'Hệ thống', text: `${deathNotice(player)} (${period === 'night' ? 'Đêm' : 'Ngày'} ${room.dayNumber})`, channel: 'system', timestamp: Date.now() });
 }
 
+function sendBotChat(room: ServerRoom, bot: PlayerState, turn: number, accusedId?: string | null) {
+  const text = botChatText(bot, room.players, room.dayVotes, room.dayNumber, turn, accusedId);
+  if (!text) return;
+  room.messages.push({ id: `bot_chat_${Date.now()}_${bot.id}`, senderId: bot.id, senderName: bot.name, text, channel: 'global', timestamp: Date.now() });
+}
+
+function scheduleBotDiscussion(room: ServerRoom) {
+  const queue = room.players.filter((p) => p.isBot && p.isAlive).map((p) => p.id);
+  let turn = 0;
+  const speak = () => {
+    room.botChatTimer = null;
+    if (!room.clients.size || room.phaseTransition || (room.phase !== 'day_discussion' && room.phase !== 'day_voting')) return;
+    const bot = room.players.find((p) => p.id === queue[turn]);
+    if (bot) { sendBotChat(room, bot, turn); broadcastRoomState(room); }
+    turn++;
+    if (turn < queue.length) room.botChatTimer = setTimeout(speak, 4200);
+  };
+  if (queue.length) room.botChatTimer = setTimeout(speak, 1800);
+}
+
 function executeResolveNight(room: ServerRoom) {
   if (room.phase !== 'night') return;
   clearRoomTimers(room);
@@ -537,6 +563,7 @@ function executeResolveNight(room: ServerRoom) {
     room.logs.push(
       `Ngày ${room.dayNumber}: Dân làng có 3 phút (180s) để thảo luận và bỏ phiếu (hoặc Bỏ Phiếu Trắng để skip).`
     );
+    scheduleBotDiscussion(room);
   }
 
   broadcastRoomState(room);
@@ -588,6 +615,8 @@ function executeResolveDayDiscussion(room: ServerRoom) {
   room.accusedPlayerId = nomination.accusedId;
   room.trialVotes = {};
   room.phaseEndsAt = Date.now() + DAY_TRIAL_DURATION_MS;
+  const accusedBot = room.players.find((p) => p.id === room.accusedPlayerId && p.isBot);
+  if (accusedBot) sendBotChat(room, accusedBot, 0, room.accusedPlayerId);
 
   // Bots cast their Kill/Save votes after 2.5 seconds
   room.botAutoActTimer = setTimeout(() => {
