@@ -67,6 +67,10 @@
   background: transparent;
 }
 
+.modal-scroll::-webkit-scrollbar-button {
+  display: none;
+}
+
 .game-results-scroll::-webkit-scrollbar-thumb,
 .modal-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;

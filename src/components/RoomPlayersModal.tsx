@@ -88,7 +88,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
       aria-labelledby="room-players-title"
       data-testid="separate-players-modal"
     >
-      <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-[#120e1b] border border-[#d4af37]/45 p-3.5 sm:p-5 shadow-2xl space-y-3.5">
+      <div className="modal-scroll w-full max-w-2xl max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-[#120e1b] border border-[#d4af37]/45 p-3.5 sm:p-5 shadow-2xl space-y-3.5">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
           <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
 
         {/* Full Player Roster Around the Bonfire */}
         <div className="space-y-1.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
+          <div data-testid="room-player-roster" className="modal-scroll grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto overscroll-contain pr-1">
             {players.map((p) => {
               const isMe = p.id === localPlayerId;
               return (
