@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { phaseNotice } from './src/game/phaseNotice';
+import { environmentStage, PHASE_TRANSITION_MS, type PhaseTransition } from './src/game/phaseTransition';
 import { littleGirlHint, validNightChoice } from './src/game/nightAction';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -56,6 +57,7 @@ export interface ChatMessage {
 }
 
 export interface RoomPublicState {
+  phaseTransition?: PhaseTransition | null;
   littleGirlClue?: string | null;
   nightRecaps?: Array<{ night: number; lines: string[] }>;
   roomCode: string;
@@ -234,6 +236,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     accusedPlayerId: room.accusedPlayerId ?? null,
     trialVotes: room.trialVotes ?? {},
     phaseEndsAt: room.phaseEndsAt ?? null,
+    phaseTransition: room.phaseTransition ?? null,
     nightCompletedCount: room.nightCompletedCount ?? 0,
     nightRequiredCount: room.nightRequiredCount ?? 0,
     allNightActionsSubmitted: room.allNightActionsSubmitted ?? false,
@@ -421,6 +424,7 @@ function fillBotTrialVotes(room: ServerRoom) {
 
 function enterNightPhase(room: ServerRoom) {
   clearRoomTimers(room);
+  room.phaseTransition = null;
   room.phase = 'night';
   room.wolfTargetId = null;
   room.seerInspection = null;
@@ -537,19 +541,32 @@ function executeResolveNight(room: ServerRoom) {
   broadcastRoomState(room);
 }
 
+function finishPhaseTransition(room: ServerRoom) {
+  if (!room.phaseTransition) return;
+  room.phaseTransition = null;
+  if (room.phase === 'night') executeResolveNight(room);
+  else if (room.phase === 'day_trial') executeResolveTrialVerdict(room);
+  else if (room.phase === 'day_discussion' || room.phase === 'day_voting') {
+    room.dayNumber += 1;
+    enterNightPhase(room);
+  }
+}
+
+function beginPhaseTransition(room: ServerRoom, to: 'day' | 'night') {
+  if (room.phaseTransition) return;
+  clearRoomTimers(room);
+  const now = Date.now();
+  room.phaseTransition = { from: environmentStage(room.phase), to, startedAt: now, endsAt: now + PHASE_TRANSITION_MS };
+  room.phaseEndsAt = room.phaseTransition.endsAt;
+  room.messages.push({ id: `transition_${now}`, senderId: 'system', senderName: 'Hệ thống', text: `${to === 'day' ? 'Bình minh' : 'Đêm mới'} sau 5 giây. Đã khóa lựa chọn.`, channel: 'system', timestamp: now });
+  room.autoAdvanceTimer = setTimeout(() => finishPhaseTransition(room), PHASE_TRANSITION_MS);
+  broadcastRoomState(room);
+}
+
 function checkNightAutoSkip(room: ServerRoom) {
   if (room.phase !== 'night') return;
   updateNightProgressFields(room);
-  if (room.allNightActionsSubmitted && !room.autoAdvanceTimer) {
-    // Give 1.2s so players see the inspection result / checkmark before transitioning to Day
-    room.autoAdvanceTimer = setTimeout(() => {
-      room.autoAdvanceTimer = null;
-      if (room.phase === 'night') {
-        room.logs.push('Tất cả chức năng trong đêm đã hoàn tất — tự động chuyển sang Ban Ngày!');
-        executeResolveNight(room);
-      }
-    }, 1200);
-  }
+  if (room.allNightActionsSubmitted) beginPhaseTransition(room, 'day');
 }
 
 function executeResolveDayDiscussion(room: ServerRoom) {
@@ -561,12 +578,7 @@ function executeResolveDayDiscussion(room: ServerRoom) {
   room.logs.push(...nomination.logs);
 
   if (!nomination.accusedId) {
-    // Blank vote won or tie -> skip straight to next Night!
-    room.dayNumber += 1;
-    room.logs.push(
-      `Màn đêm thứ ${room.dayNumber} buông xuống Huyết Nguyệt Thôn. Mỗi người có 1 phút (60s) để thực hiện chức năng.`
-    );
-    enterNightPhase(room);
+    beginPhaseTransition(room, 'night');
     return;
   }
 
@@ -581,6 +593,7 @@ function executeResolveDayDiscussion(room: ServerRoom) {
     if (room.phase !== 'day_trial') return;
     fillBotTrialVotes(room);
     broadcastRoomState(room);
+    if (room.players.filter((p) => p.isAlive && p.id !== room.accusedPlayerId).every((p) => room.trialVotes?.[p.id])) beginPhaseTransition(room, 'night');
   }, 2500);
 
   broadcastRoomState(room);
@@ -664,15 +677,17 @@ async function startServer() {
     for (const room of rooms.values()) {
       if (!room.phaseEndsAt || now < room.phaseEndsAt) continue;
 
+      if (room.phaseTransition) { finishPhaseTransition(room); continue; }
+
       if (room.phase === 'night') {
         room.logs.push('Đã hết 1 phút (60s) ban đêm — bình minh ló dạng trên Huyết Nguyệt Thôn!');
-        executeResolveNight(room);
+        beginPhaseTransition(room, 'day');
       } else if (room.phase === 'day_discussion' || room.phase === 'day_voting') {
         room.logs.push('Đã hết 3 phút (180s) thảo luận ban ngày — tổng kết phiếu bầu!');
         executeResolveDayDiscussion(room);
       } else if (room.phase === 'day_trial') {
         room.logs.push('Đã hết 30 giây biện minh trên giàn — công bố phán quyết Giết / Sống!');
-        executeResolveTrialVerdict(room);
+        beginPhaseTransition(room, 'night');
       }
     }
   }, 1000);
@@ -920,7 +935,7 @@ async function startServer() {
           }
 
           case 'room:add-bot': {
-            if (room.phase !== 'lobby') break;
+            if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
             if (room.players.length < Math.min(MAX_ROOM_PLAYERS, room.maxPlayers ?? MAX_ROOM_PLAYERS)) {
               const usedNames = new Set(room.players.map((p) => p.name));
               const newBot = createBotPlayer(room.players.length, usedNames);
@@ -948,7 +963,7 @@ async function startServer() {
           }
 
           case 'room:remove-bot': {
-            if (room.phase !== 'lobby') break;
+            if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
             if (room.players.length > 1) {
               const lastBotIdx = [...room.players]
                 .reverse()
@@ -973,7 +988,7 @@ async function startServer() {
           }
 
           case 'room:set-player-count': {
-            if (room.phase !== 'lobby') break;
+            if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
             const targetCount = clampRoomPlayerCount(Number(msg.targetCount) || 8);
             room.maxPlayers = Math.min(MAX_ROOM_PLAYERS, Math.max(targetCount, room.players.length));
             while (room.players.length > targetCount) {
@@ -1004,12 +1019,19 @@ async function startServer() {
           }
 
           case 'room:kick-player': {
-            if (room.phase !== 'lobby') break;
-            if (room.players.length > MIN_ROOM_PLAYERS) {
+            if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
+            if (room.players.length > 1) {
               const targetId = String(msg.targetId || '');
               const idx = room.players.findIndex((p) => p.id === targetId && p.id !== currentPlayerId);
               if (idx !== -1) {
                 const removed = room.players.splice(idx, 1)[0];
+                const kickedSocket = room.clients.get(removed.id);
+                room.clients.delete(removed.id);
+                if (kickedSocket?.readyState === WebSocket.OPEN) {
+                  kickedSocket.send(JSON.stringify({ type: 'room:error', message: 'Chủ phòng đã mời bạn rời phòng.' }));
+                  kickedSocket.close(1000, 'Removed by host');
+                }
+                broadcastEvent(room, { type: 'webrtc:peer-left', peerId: removed.id });
                 room.players.forEach((p, i) => {
                   p.seatIndex = i;
                   const seat = getSeatTransform(i, room.players.length, 8.2);
@@ -1031,6 +1053,7 @@ async function startServer() {
           }
 
           case 'room:promote-host': {
+            if (room.phase !== 'lobby' || !room.players.some((p) => p.id === currentPlayerId && p.isHost)) break;
             const targetId = String(msg.targetId || '');
             const target = room.players.find((p) => p.id === targetId);
             if (target) {
@@ -1044,7 +1067,7 @@ async function startServer() {
           }
 
           case 'room:update-deck': {
-            if (room.phase === 'lobby' && msg.roleDeck) {
+            if (room.phase === 'lobby' && room.players.some((p) => p.id === currentPlayerId && p.isHost) && msg.roleDeck) {
               const merged = { ...room.roleDeck, ...msg.roleDeck };
               room.roleDeck = clampRoleDeckToPlayerCount(
                 merged,
@@ -1143,7 +1166,7 @@ async function startServer() {
           }
 
           case 'game:night-action': {
-            if (room.phase !== 'night') break;
+            if (room.phase !== 'night' || room.phaseTransition) break;
             const actor = room.players.find((p) => p.id === currentPlayerId);
             if (!actor) break;
             const targetId = typeof msg.targetId === 'string' ? msg.targetId : null;
@@ -1159,7 +1182,7 @@ async function startServer() {
           }
 
           case 'game:start-voting': {
-            if (room.phase === 'day_discussion') {
+            if (room.phase === 'day_discussion' && !room.phaseTransition) {
               room.phase = 'day_voting';
               fillBotDayVotes(room);
               broadcastRoomState(room);
@@ -1168,7 +1191,7 @@ async function startServer() {
           }
 
           case 'game:submit-vote': {
-            if (room.phase !== 'day_discussion' && room.phase !== 'day_voting') break;
+            if ((room.phase !== 'day_discussion' && room.phase !== 'day_voting') || room.phaseTransition) break;
             const voter = room.players.find((p) => p.id === currentPlayerId);
             const targetId = typeof msg.targetId === 'string' ? msg.targetId : '';
             if (!voter?.isAlive || (targetId !== 'skip' && !room.players.some((p) => p.id === targetId && p.isAlive))) break;
@@ -1180,19 +1203,12 @@ async function startServer() {
             // Check if all alive players have voted -> automatically evaluate trial nominee!
             const alivePlayers = room.players.filter((p) => p.isAlive);
             const allVoted = alivePlayers.every((p) => Boolean(room.dayVotes[p.id]));
-            if (allVoted && !room.autoAdvanceTimer) {
-              room.autoAdvanceTimer = setTimeout(() => {
-                room.autoAdvanceTimer = null;
-                if (room.phase === 'day_discussion' || room.phase === 'day_voting') {
-                  executeResolveDayDiscussion(room);
-                }
-              }, 900);
-            }
+            if (allVoted) executeResolveDayDiscussion(room);
             break;
           }
 
           case 'game:submit-trial-vote': {
-            if (room.phase !== 'day_trial' || !room.accusedPlayerId) break;
+            if (room.phase !== 'day_trial' || !room.accusedPlayerId || room.phaseTransition) break;
             const voter = room.players.find((p) => p.id === currentPlayerId);
             const choice = msg.choice === 'kill' ? 'kill' : msg.choice === 'save' ? 'save' : null;
             if (voter && voter.isAlive && voter.id !== room.accusedPlayerId && choice) {
@@ -1208,29 +1224,22 @@ async function startServer() {
               const allTrialVoted = eligibleVoters.every(
                 (p) => Boolean(room.trialVotes?.[p.id])
               );
-              if (allTrialVoted && !room.autoAdvanceTimer) {
-                room.autoAdvanceTimer = setTimeout(() => {
-                  room.autoAdvanceTimer = null;
-                  if (room.phase === 'day_trial') {
-                    executeResolveTrialVerdict(room);
-                  }
-                }, 1000);
-              }
+              if (allTrialVoted) beginPhaseTransition(room, 'night');
             }
             break;
           }
 
           case 'game:resolve-trial': {
-            if (room.phase === 'day_trial') {
-              executeResolveTrialVerdict(room);
-            }
+            // Trial resolution is automatic; clients cannot bypass defense or countdown.
             break;
           }
 
           case 'game:reset-lobby': {
             clearRoomTimers(room);
             room.phase = 'lobby';
+            room.phaseTransition = null;
             room.nightRecaps = [];
+            room.messages = room.messages.filter((m) => m.channel !== 'system');
             room.inspections = {};
             room.littleGirlClues = {};
             room.hunterTargets = {};

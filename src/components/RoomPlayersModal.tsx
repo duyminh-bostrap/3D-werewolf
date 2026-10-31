@@ -79,10 +79,6 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
 
   const humanCount = players.filter((p) => !p.isBot).length;
   const botCount = players.filter((p) => p.isBot).length;
-  const roomSizes = Array.from(
-    { length: MAX_ROOM_PLAYERS - MIN_ROOM_PLAYERS + 1 },
-    (_, i) => MIN_ROOM_PLAYERS + i
-  );
 
   return (
     <div
@@ -158,7 +154,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-200">
-                    Số người (5–15):
+                    Số chỗ:
                   </span>
                   <div className="inline-flex items-center rounded-xl bg-[#110d19] border border-[#d4af37]/45 p-0.5 font-mono-tabular">
                     <button
@@ -214,23 +210,6 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1">
-                {roomSizes.map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    data-testid={`set-room-size-${count}`}
-                    onClick={() => onSetPlayerCount(count, true)}
-                    className={`px-2 py-0.5 rounded-lg text-[11px] font-mono-tabular font-semibold border transition-colors cursor-pointer ${
-                      targetSlots === count
-                        ? 'bg-[#9e1b24] border-[#d4af37] text-white'
-                        : 'bg-[#110d19] border-white/10 text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
             <div
@@ -335,7 +314,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                       </button>
                     )}
 
-                    {canEditPlayerCount && !isMe && players.length > MIN_ROOM_PLAYERS && (
+                    {canEditPlayerCount && !isMe && (
                       <button
                         type="button"
                         onClick={() => onKickPlayer(p.id)}

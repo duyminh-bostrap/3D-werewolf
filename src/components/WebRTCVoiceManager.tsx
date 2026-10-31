@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
+import { attachMicrophone, MICROPHONE_CONSTRAINTS } from '../audio/voiceCapture';
 
 interface WebRTCVoiceManagerProps {
   wsRef: React.MutableRefObject<WebSocket | null>;
@@ -28,7 +29,21 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   isSpeaking,
   onVoiceStateChange,
 }) => {
-  const [micPermissionState, setMicPermissionState] = useState<'idle' | 'active' | 'simulated'>('idle');
+  const [micPermissionState, setMicPermissionState] = useState<'idle' | 'active'>('idle');
+  const [micError, setMicError] = useState('');
+  const micStartingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const aliveRef = useRef(localIsAlive);
+  aliveRef.current = localIsAlive;
+  const vadContextRef = useRef<AudioContext | null>(null);
+  const voiceCallbackRef = useRef(onVoiceStateChange);
+  voiceCallbackRef.current = onVoiceStateChange;
+  const lastVoiceRef = useRef({ muted: isMuted, speaking: isSpeaking });
+  const reportVoiceState = useCallback((muted: boolean, speaking: boolean) => {
+    if (lastVoiceRef.current.muted === muted && lastVoiceRef.current.speaking === speaking) return;
+    lastVoiceRef.current = { muted, speaking };
+    voiceCallbackRef.current(muted, speaking);
+  }, []);
   const [spatialAudioEnabled, setSpatialAudioEnabled] = useState(true);
 
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -110,9 +125,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       peersRef.current.set(peerId, pc);
 
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
-        });
+        void attachMicrophone(pc, localStreamRef.current).catch(() => {});
       }
 
       pc.onicecandidate = (event) => {
@@ -233,32 +246,35 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   }, [allowedPeerIds, createPeerConnection, closePeer, localPlayerId, wsRef]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (analyserIntervalRef.current) clearInterval(analyserIntervalRef.current);
+      void vadContextRef.current?.close().catch(() => {});
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       peersRef.current.forEach((pc) => pc.close());
       peersRef.current.clear();
+      remoteAudioElsRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; });
+      remoteAudioElsRef.current.clear();
     };
   }, []);
 
   const toggleMicrophone = useCallback(async () => {
-    if (!localIsAlive) return;
+    if (!localIsAlive || micStartingRef.current) return;
 
     if (micPermissionState === 'idle') {
+      micStartingRef.current = true;
+      setMicError('');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-        });
+        const stream = await navigator.mediaDevices.getUserMedia(MICROPHONE_CONSTRAINTS);
+        if (!mountedRef.current || !aliveRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
         localStreamRef.current = stream;
         setMicPermissionState('active');
-        onVoiceStateChange(false, false);
+        reportVoiceState(false, false);
 
         // Attach stream to existing peer connections
         for (const [peerId, pc] of peersRef.current.entries()) {
-          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+          await attachMicrophone(pc, stream);
           pc.createOffer()
             .then((offer) => pc.setLocalDescription(offer))
             .then(() => {
@@ -279,6 +295,8 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
           (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           const audioCtx = new AudioCtx();
+          vadContextRef.current = audioCtx;
+          await audioCtx.resume();
           const source = audioCtx.createMediaStreamSource(stream);
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 256;
@@ -292,13 +310,15 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
             analyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
             const speakingNow = avg > 18;
-            onVoiceStateChange(!enabled, speakingNow);
+            reportVoiceState(!enabled, speakingNow);
           }, 220);
         }
       } catch {
-        // Fallback for headless browser or device without physical mic: enable simulated Push-to-Talk Voice mode
-        setMicPermissionState('simulated');
-        onVoiceStateChange(false, true);
+        localStreamRef.current?.getTracks().forEach((track) => { track.enabled = false; });
+        reportVoiceState(true, false);
+        if (mountedRef.current) setMicError('Không mở được mic. Hãy kiểm tra quyền micro và thiết bị âm thanh.');
+      } finally {
+        micStartingRef.current = false;
       }
       return;
     }
@@ -308,13 +328,9 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       localStreamRef.current.getAudioTracks().forEach((t) => {
         t.enabled = !nextMuted;
       });
-      onVoiceStateChange(nextMuted, false);
-    } else {
-      // Simulated voice mode toggle
-      const nextMuted = !isMuted;
-      onVoiceStateChange(nextMuted, !nextMuted);
+      reportVoiceState(nextMuted, false);
     }
-  }, [micPermissionState, isMuted, localIsAlive, onVoiceStateChange, wsRef]);
+  }, [micPermissionState, isMuted, localIsAlive, reportVoiceState, wsRef]);
 
   useEffect(() => {
     const onExternalToggle = () => {
@@ -326,5 +342,5 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     };
   }, [toggleMicrophone]);
 
-  return null;
+  return micError ? <div role="alert" className="pointer-events-auto fixed left-3 right-3 top-28 z-50 rounded-xl border border-red-400/40 bg-[#2c111c] px-3 py-2 text-xs text-red-100" onClick={() => setMicError('')}>{micError}</div> : null;
 };

@@ -42,3 +42,11 @@ Các P0 trong `GAMEPLAY_SPEC.md` vẫn còn: role trong payload công khai, ID c
 Luật hiện có cần chủ sản phẩm chốt nếu muốn đổi: Sói Trắng vẫn có thể thắng theo phe Sói; hòa phiếu Sói phụ thuộc thứ tự phiếu; không còn ai sống đang tính Dân thắng; Bán Sói nằm nhóm bài Sói nhưng chưa hóa được tính phía làng. Witch cứu một mục tiêu đã chọn, không tự chuyển thuốc sang con mồi khác khi bầy thay phiếu.
 
 Chưa kiểm tra hiệu ứng trên điện thoại thật, một ván người thật có voice, hoặc OAuth Google/Apple.
+
+## Kiểm tra bổ sung chuyển pha, phòng và mic
+
+Countdown do server quyết định, dài 5 giây và khóa lựa chọn. Đã kiểm tra nhiều kết nối cho đêm→ngày, biện minh→đêm, bỏ phiếu trắng→đêm và reset giữa countdown. Cảnh 3D đã render các mốc đêm/bình minh/ngày/biện minh/đêm xuống trong Edge; chưa nghe thử mic trên phần cứng thật.
+
+`room-limits-test.cjs` xác nhận host sửa được deck, khách không sửa deck/capacity/tự nhận host/kick; kick dưới 5 được phép, người bị kick được thông báo, còn 1 người không start được. Kiểm tra browser xác nhận giao diện role chỉ xem, stepper số chỗ, bỏ preset và dọn chat cục bộ.
+
+Mic: capture mono có khử vọng/ồn; chặn yêu cầu thu đồng thời, tái sử dụng sender, chỉ gửi trạng thái VAD khi thay đổi và dọn context/stream khi rời phòng. Browser với mic giả xác nhận hai click nhanh chỉ xin một stream, mute/unmute không tạo stream mới, VAD không gửi lặp khi yên lặng và unmount dọn tài nguyên. `voiceCapture.test.ts` kiểm tra không thêm trùng audio sender. Tiếng rè thực tế vẫn cần nghe lại trên thiết bị của người dùng.

@@ -14,6 +14,16 @@ Tài liệu này là hợp đồng hành vi của luồng chơi chính. Các m�
 
 Server là nguồn quyết định duy nhất cho pha, thời hạn, quyền hành động, phiếu bầu, kết quả và thắng/thua. Client hiển thị và gửi ý định; camera, âm thanh hoặc đóng modal không được tự kết thúc một pha.
 
+### Cập nhật chuyển pha và quyền phòng
+
+- Đủ chức năng đêm hoặc hết giờ: khóa lựa chọn, đếm ngược 5 giây, nội suy ánh sáng đêm → ngày rồi mới tổng kết đêm.
+- Đủ phiếu ngày hoặc hết giờ: có bị cáo thì vào 30 giây biện minh, camera focus bị cáo và ánh sáng ngày → hoàng hôn. Không có bị cáo thì khóa phiếu, đếm 5 giây ngày → đêm.
+- Đủ phiếu Giết/Sống hoặc hết biện minh: khóa phiếu, đếm 5 giây hoàng hôn → đêm rồi tổng kết phiên xử. RPC chốt tay không còn hiệu lực. Reset hủy countdown đang chờ.
+- Chủ phòng được sửa bộ bài/số chỗ, thêm/bớt AI, kick và chuyển quyền trong lobby. Người khác chỉ xem bộ bài, kể cả chi tiết lá bài. Server kiểm tra quyền, không chỉ vô hiệu hóa nút.
+- Capacity vẫn 5–15; số thành viên thực tế có thể dưới 5 vì kick/rời phòng. Dưới 5 không được bắt đầu.
+- Khi hết ván/về lobby, popup và chat ẩn thông báo hệ thống; reset loại thông báo hệ thống ván cũ. Dọn trò chuyện chỉ ẩn lịch sử trên máy người bấm; tin mới tiếp tục hiện.
+- Chọn nhân vật dùng proxy sát thân và bảng tên; nhân vật local không chặn việc chọn người khác.
+
 ## 2. Sơ đồ tổng thể
 
 ```mermaid
@@ -267,7 +277,7 @@ Mỗi action xác nhận nên có phản hồi accepted/rejected, mã lỗi và 
 |---|---|---|
 | P0 | `serializeRoomState` vẫn trả toàn bộ `players` có role, lovers/wolfTargetId và logs; thuốc, kết quả soi và manh mối Cô Bé đã tách theo viewer | Vai bí mật còn có thể đọc từ mạng; cần public DTO và private payload đầy đủ theo viewer |
 | P0 | WebSocket nhận `playerId` từ client, chưa xác minh token Supabase hoặc quyền sở hữu ID | Có thể giả danh/chiếm phiên; cần xác thực kết nối và gắn socket với principal server xác minh |
-| P0 | Nhiều lệnh set count/add bot/kick/promote/update deck/reset/resolve trial thiếu kiểm tra host; còn RPC resolve trial | Người không có quyền có thể thay phòng/kết thúc sớm; kiểm tra quyền từng lệnh, bỏ đường cưỡng chế khỏi production |
+| P0 / đã sửa một phần | Set count/add bot/remove bot/kick/promote/update deck đã kiểm tra host; RPC resolve trial không còn hiệu lực. Reset lobby vẫn chưa giới hạn host | Hoàn tất quyền reset và kiểm toán các lệnh còn lại trước phát hành |
 | P0 | Nhánh join ván đang chạy thêm người mới với role villager, không có spectator roster | Làm thay số người sống/vote giữa ván; chặn tham gia chơi, tách danh sách chờ |
 | P1 | `role_reveal` đổi cả phòng theo lần confirm đầu tiên, không có xác nhận riêng/timeout | Có người chưa xem bài; thêm barrier hoặc modal riêng tồn tại qua chuyển pha |
 | Đã sửa | Night action validate chung trước mutate, gồm role, target sống, self/đồng đội, thuốc, Cupid và acted | Unit test và kiểm tra WebSocket trong `role-flow-test.cjs` |

@@ -35,6 +35,7 @@ const ROLE_LABELS: Record<RoleId, string> = {
 interface RoleConfigModalProps {
   isOpen: boolean;
   isLobby?: boolean;
+  isHost?: boolean;
   playerCount: number;
   roleDeck: RoleDeckConfig;
   onUpdateDeck: (deck: Partial<RoleDeckConfig>) => void;
@@ -47,6 +48,7 @@ interface RoleConfigModalProps {
 export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
   isOpen,
   isLobby = true,
+  isHost = false,
   playerCount,
   roleDeck,
   onUpdateDeck,
@@ -59,6 +61,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
   const [inspectingRoleId, setInspectingRoleId] = useState<RoleId | null>(null);
 
   if (!isOpen) return null;
+  const canEdit = isLobby && isHost;
 
   const {
     deck: clampedDeck,
@@ -70,10 +73,6 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
   } = clampRoleDeckToPlayerCount(roleDeck, playerCount);
 
   const maxWolvesForRoom = Math.max(1, Math.floor((playerCount - 1) / 2));
-  const roomSizes = Array.from(
-    { length: MAX_ROOM_PLAYERS - MIN_ROOM_PLAYERS + 1 },
-    (_, i) => MIN_ROOM_PLAYERS + i
-  );
 
   const configurableRoles: Array<{
     key: keyof RoleDeckConfig;
@@ -200,15 +199,17 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
             <div className="rounded-lg bg-slate-400/10 px-2 py-2 text-center"><dt className="text-[11px] text-slate-300">Dân làng</dt><dd className="mt-1 text-lg font-bold tabular-nums text-slate-200">{villagerCount}</dd></div>
           </dl>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" data-testid="full-variety-roles-btn" onClick={handleFullVarietyPreset} className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-[#271b3a] px-2 text-xs font-semibold text-[#f3e5ab] hover:bg-[#35244f]"><Flame className="h-3.5 w-3.5 shrink-0" /> Đa dạng</button>
-            <button type="button" data-testid="auto-balance-roles-btn" onClick={handleAutoBalance} className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-[#9e1b24] px-2 text-xs font-semibold text-white hover:bg-[#b91c1c]"><Wand2 className="h-3.5 w-3.5 shrink-0" /> Cân bằng</button>
+            <button type="button" data-testid="full-variety-roles-btn" disabled={!canEdit} onClick={handleFullVarietyPreset} className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-[#271b3a] px-2 text-xs font-semibold text-[#f3e5ab] hover:bg-[#35244f]"><Flame className="h-3.5 w-3.5 shrink-0" /> Đa dạng</button>
+            <button type="button" data-testid="auto-balance-roles-btn" disabled={!canEdit} onClick={handleAutoBalance} className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-[#9e1b24] px-2 text-xs font-semibold text-white hover:bg-[#b91c1c]"><Wand2 className="h-3.5 w-3.5 shrink-0" /> Cân bằng</button>
           </div>
           <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3">
-            {isLobby ? <label className="flex min-w-0 items-center gap-2 text-xs text-slate-300">Số chỗ
-              <select aria-label="Số chỗ trong phòng" value={playerCount} onChange={(e) => onSetPlayerCount(Number(e.target.value), true)} className="min-h-10 rounded-lg border border-white/15 bg-[#110d19] px-3 text-sm font-semibold text-[#e8cd82]">
-                {roomSizes.map((count) => <option key={count} value={count}>{count}</option>)}
-              </select>
-            </label> : <span className="text-xs text-slate-400">Đang trong ván</span>}
+            {canEdit ? <div className="flex min-w-0 items-center gap-2 text-xs text-slate-300"><span>Số chỗ</span>
+              <div role="group" aria-label="Số chỗ trong phòng" className="grid grid-cols-[36px_32px_36px] items-center rounded-lg border border-white/15 bg-[#110d19]">
+                <button type="button" aria-label="Giảm số chỗ" disabled={playerCount <= MIN_ROOM_PLAYERS} onClick={() => onSetPlayerCount(playerCount - 1, true)} className="flex h-10 items-center justify-center rounded-lg text-[#e8cd82] hover:bg-white/10 disabled:opacity-30"><Minus className="h-4 w-4" /></button>
+                <output aria-live="polite" className="text-center text-sm font-semibold text-[#e8cd82]">{playerCount}</output>
+                <button type="button" aria-label="Tăng số chỗ" disabled={playerCount >= MAX_ROOM_PLAYERS} onClick={() => onSetPlayerCount(playerCount + 1, true)} className="flex h-10 items-center justify-center rounded-lg text-[#e8cd82] hover:bg-white/10 disabled:opacity-30"><Plus className="h-4 w-4" /></button>
+              </div>
+            </div> : <span className="text-xs text-slate-400">{isLobby ? 'Chỉ chủ phòng được chỉnh' : 'Đang trong ván · Chỉ xem'}</span>}
             <button type="button" onClick={() => { onClose(); onOpenRoomPlayers(); }} className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[#e8cd82] hover:bg-white/5"><Users className="h-4 w-4" /> Phòng <ChevronRight className="h-3.5 w-3.5" /></button>
           </div>
         </section>
@@ -253,10 +254,10 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
                 </button>
                 <div className="flex-1 py-1"><h3 title={meta.nameVi} className="min-h-7 break-words text-[11px] font-semibold leading-[14px] text-slate-100">{ROLE_LABELS[roleId]}</h3></div>
                 <div className="grid grid-cols-[minmax(24px,1fr)_16px_minmax(24px,1fr)] items-center rounded-lg border border-white/10 bg-black/20">
-                  <button type="button" disabled={!canDecrease} aria-label={`Giảm ${meta.nameVi}`} onClick={() => onUpdateDeck({ ...clampedDeck, [key]: Math.max(0, count - 1) })}
+                  <button type="button" disabled={!canEdit || !canDecrease} aria-label={`Giảm ${meta.nameVi}`} onClick={() => onUpdateDeck({ ...clampedDeck, [key]: Math.max(0, count - 1) })}
                     className="flex min-h-6 items-center justify-center rounded-l-lg text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"><Minus className="h-3.5 w-3.5" /></button>
                   <span className="text-center text-xs font-bold tabular-nums text-white">{count}</span>
-                  <button type="button" disabled={!canIncrease} aria-label={`Tăng ${meta.nameVi}`} onClick={() => onUpdateDeck({ ...clampedDeck, [key]: count + 1 })}
+                  <button type="button" disabled={!canEdit || !canIncrease} aria-label={`Tăng ${meta.nameVi}`} onClick={() => onUpdateDeck({ ...clampedDeck, [key]: count + 1 })}
                     className="flex min-h-6 items-center justify-center rounded-r-lg text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"><Plus className="h-3.5 w-3.5" /></button>
                 </div>
               </article>
@@ -275,7 +276,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
         </div>
 
         {/* Quick Tarot Role Experience Bar for all 15 Roles */}
-        <details className="rounded-xl border border-white/10 bg-[#18121e] p-3">
+        {canEdit && <details className="rounded-xl border border-white/10 bg-[#18121e] p-3">
           <summary className="cursor-pointer text-xs font-semibold text-[#e8cd82]">Thử vai trò</summary>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {allPlayableRoles.map((rId) => (
@@ -292,7 +293,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
               </button>
             ))}
           </div>
-        </details>
+        </details>}
         </div>
 
         <div className="shrink-0 border-t border-white/10 p-4">
@@ -410,7 +411,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
                   <div className="flex items-center gap-1.5 font-mono-tabular">
                     <button
                       type="button"
-                      disabled={!canDecreaseInspecting}
+                      disabled={!canEdit || !canDecreaseInspecting}
                       onClick={() =>
                         onUpdateDeck({
                           ...clampedDeck,
@@ -426,7 +427,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
                     </span>
                     <button
                       type="button"
-                      disabled={!canIncreaseInspecting}
+                      disabled={!canEdit || !canIncreaseInspecting}
                       onClick={() =>
                         onUpdateDeck({
                           ...clampedDeck,
@@ -453,6 +454,7 @@ export const RoleConfigModal: React.FC<RoleConfigModalProps> = ({
                     setInspectingRoleId(null);
                     onClose();
                   }}
+                  disabled={!canEdit}
                   className="px-3 py-1.5 rounded-xl bg-[#281c3a] hover:bg-[#392752] border border-[#d4af37]/50 text-xs font-semibold text-[#f3e5ab] cursor-pointer"
                 >
                   Chơi Vai Này

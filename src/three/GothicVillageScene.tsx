@@ -2,9 +2,11 @@ import { canSeeWolfOutline } from '../game/wolfOutline';
 import { introTourAngle, INTRO_TOUR_SECONDS } from '../game/introTour';
 import { newlyDeadPlayers } from '../game/deathNotifications';
 import { deathPresentation } from '../game/deathPresentation';
+import { environmentStage, PHASE_TRANSITION_MS, transitionProgress, type PhaseTransition } from '../game/phaseTransition';
 import { advanceTrialVisual, type TrialVisual } from '../game/trialVisual';
 import { followCameraPose } from '../game/followCamera';
 import { CameraDrag } from '../game/cameraDrag';
+import { createPlayerHitbox, selectableHit } from './playerPicking';
 import React, { useEffect, useRef } from 'react';
 import type { ChatMessage } from '../../server';
 import { activeChatBubbles } from '../game/chatBubbles';
@@ -12,6 +14,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   canPlayerMoveInPhase,
+  DAY_TRIAL_DURATION_MS,
   getSeatTransform,
   isWolfPackRole,
   resolveCameraCollision,
@@ -35,6 +38,8 @@ export type LightingStageMode = 'auto' | 'dusk' | 'night' | 'day';
 export type CameraPreset = 'follow' | 'first' | 'overview' | 'bonfire';
 
 export interface GothicVillageSceneProps {
+  phaseTransition?: PhaseTransition | null;
+  phaseEndsAt?: number | null;
   isTitleScreen: boolean;
   isIntroPlaying: boolean;
   onIntroComplete: () => void;
@@ -64,6 +69,14 @@ const _skyColorCurrent = new THREE.Color(0x281c3d);
 const _hemiSkyTarget = new THREE.Color();
 const _hemiGroundTarget = new THREE.Color();
 const _keyColorTarget = new THREE.Color();
+const _lightingColorScratch = new THREE.Color();
+const _lightingBlendTarget = new THREE.Color();
+const LIGHTING = {
+  night: { sky: 0x040710, key: 0x9cbcff, hemi: 0x263557, ground: 0x070b13, keyPower: 0.65, hemiPower: 0.3, fill: 28, fire: 0xff3b14, firePower: 5.6, lamp: 3.2, moon: 0xdc2626, halo: 0xff1e27, haloOpacity: 0.45, moonY: 19.5, moonScale: 1.38, fog: 0.038, exposure: 0.85, flameScale: 1.15 },
+  day: { sky: 0x408cbb, key: 0xfff0d2, hemi: 0xbedfff, ground: 0x293d38, keyPower: 3.2, hemiPower: 1.15, fill: 0, fire: 0xff9933, firePower: 1.15, lamp: 0.06, moon: 0xfffbeb, halo: 0xfef08a, haloOpacity: 0.62, moonY: 23.5, moonScale: 0.95, fog: 0.006, exposure: 1.15, flameScale: 0.55 },
+  dusk: { sky: 0x44385c, key: 0xffd29a, hemi: 0x707cb2, ground: 0x3a2a35, keyPower: 2.1, hemiPower: 0.95, fill: 12, fire: 0xff6b1a, firePower: 4.4, lamp: 2.1, moon: 0xf59e0b, halo: 0xfbbf24, haloOpacity: 0.36, moonY: 18.2, moonScale: 1.08, fog: 0.015, exposure: 1.12, flameScale: 1 },
+};
+const NIGHT_VISION_LIGHTING = { ...LIGHTING.night, sky: 0x16050c, key: 0xff5c69 };
 
 function disposePlayerLabel(label: THREE.Sprite) {
   label.traverse((object) => {
@@ -75,6 +88,8 @@ function disposePlayerLabel(label: THREE.Sprite) {
 }
 
 export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
+  phaseTransition = null,
+  phaseEndsAt = null,
   isTitleScreen,
   isIntroPlaying,
   onIntroComplete,
@@ -97,6 +112,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
   // Store latest props in ref so React HUD updates never tear down WebGL canvas
   const latestPropsRef = useRef({
+    phaseEndsAt,
+    phaseTransition,
     isTitleScreen,
     isIntroPlaying,
     onIntroComplete,
@@ -118,6 +135,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
 
   useEffect(() => {
     latestPropsRef.current = {
+      phaseEndsAt,
+      phaseTransition,
       isTitleScreen,
       isIntroPlaying,
       onIntroComplete,
@@ -137,6 +156,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       onKickFireball,
     };
   }, [
+    phaseEndsAt,
+    phaseTransition,
     isTitleScreen,
     isIntroPlaying,
     onIntroComplete,
@@ -484,9 +505,17 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       pointerNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(pointerNDC, camera);
-      const hits = raycaster.intersectObjects(interactableHitboxes, false);
-      if (hits.length > 0) {
-        const hitObj = hits[0].object;
+      const targets = [...interactableHitboxes];
+      for (const [id, entry] of avatarMap) {
+        if (id !== latestPropsRef.current.localPlayerId && entry.labelSprite.visible && entry.group.visible) {
+          entry.labelSprite.userData.playerId = id;
+          entry.labelSprite.userData.isPlayerLabel = true;
+          targets.push(entry.labelSprite);
+        }
+      }
+      const hit = selectableHit(raycaster.intersectObjects(targets, false), latestPropsRef.current.localPlayerId);
+      if (hit) {
+        const hitObj = hit.object;
         if (hitObj.userData.isFireball) {
           // Direct click/tap kick on the 3D Fireball!
           const dx = fireballState.x - localX;
@@ -654,13 +683,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
           );
           newGroup.add(labelSprite);
 
-          // Generous invisible proxy collision hitbox for effortless 3D character tap/click selection
-          const hitbox = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.95, 0.95, 3.1, 10),
-            new THREE.MeshBasicMaterial({ visible: false })
-          );
-          hitbox.position.y = 1.55;
-          hitbox.userData.playerId = p.id;
+          const hitbox = createPlayerHitbox(p.id);
           newGroup.add(hitbox);
           interactableHitboxes.push(hitbox);
 
@@ -1133,25 +1156,25 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         }
       }
 
-      // 3. Determine Active Lighting Stage from Game Phase (or manual override)
-      const effectiveStage: 'dusk' | 'night' | 'day' =
-        props.lightingOverride && props.lightingOverride !== 'auto'
-          ? props.lightingOverride
-          : props.phase === 'night' || props.phase === 'role_reveal'
-          ? 'night'
-          : props.phase === 'day_announcement' ||
-            props.phase === 'day_discussion' ||
-            props.phase === 'day_voting' ||
-            props.phase === 'day_trial' ||
-            props.phase === 'hunter_revenge'
-          ? 'day'
-          : 'day';
-
-      plazaFillLight.intensity = THREE.MathUtils.lerp(plazaFillLight.intensity, effectiveStage === 'night' ? 28 : 0, dampFactor);
+      const transition = props.isTitleScreen ? null : props.phaseTransition ?? (props.phase === 'day_trial' && props.phaseEndsAt ? {
+        from: 'day' as const, to: 'dusk' as const,
+        startedAt: props.phaseEndsAt - DAY_TRIAL_DURATION_MS,
+        endsAt: props.phaseEndsAt - DAY_TRIAL_DURATION_MS + PHASE_TRANSITION_MS,
+      } : null);
+      const effectiveStage = props.isTitleScreen || props.phase === 'lobby'
+        ? (props.lightingOverride && props.lightingOverride !== 'auto' ? props.lightingOverride : 'day')
+        : environmentStage(props.phase);
+      const fromStage = transition?.from ?? effectiveStage;
+      const toStage = transition?.to ?? effectiveStage;
+      const fromLight = fromStage === 'night' && props.isWerewolfNightVision ? NIGHT_VISION_LIGHTING : LIGHTING[fromStage];
+      const toLight = toStage === 'night' && props.isWerewolfNightVision ? NIGHT_VISION_LIGHTING : LIGHTING[toStage];
+      const lightMix = transition ? transitionProgress(transition, Date.now()) : 1;
+      const lightDamp = transition ? 1 : dampFactor;
+      plazaFillLight.intensity = THREE.MathUtils.lerp(plazaFillLight.intensity, THREE.MathUtils.lerp(fromLight.fill, toLight.fill, lightMix), lightDamp);
 
       // Animate Central Bonfire, Cathedral Bell & Rising Ember Particles
       const flicker = 1 + Math.sin(elapsed * 9.5) * 0.12 + Math.cos(elapsed * 15.2) * 0.08;
-      const flameScaleMult = effectiveStage === 'day' ? 0.55 : effectiveStage === 'night' ? 1.15 : 1.0;
+      const flameScaleMult = THREE.MathUtils.lerp(fromLight.flameScale, toLight.flameScale, lightMix);
       outerFlame.scale.set(
         (1 + Math.sin(elapsed * 7) * 0.08) * flameScaleMult,
         flicker * flameScaleMult,
@@ -1186,80 +1209,32 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       }
       emberInstanced.instanceMatrix.needsUpdate = true;
 
-      // 4. Dynamic Stage-Accurate Lighting
-      let targetFogDensity = 0.016;
-      let targetExposure = 1.22;
-
-      if (effectiveStage === 'night') {
-        _skyColorTarget.setHex(props.isWerewolfNightVision ? 0x16050c : 0x040710);
-        _keyColorTarget.setHex(props.isWerewolfNightVision ? 0xff5c69 : 0x9cbcff);
-        _hemiSkyTarget.setHex(0x263557);
-        _hemiGroundTarget.setHex(0x070b13);
-        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 0.65, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.3, dampFactor);
-        bonfireLight.color.setHex(0xff3b14);
-        bonfireLight.intensity = 5.6 * flicker;
-        lampGlowMat.emissiveIntensity = 3.2;
-        moonMat.color.setHex(0xdc2626);
-        haloMat.color.setHex(0xff1e27);
-        haloMat.opacity = 0.45;
-        moonMesh.position.y = THREE.MathUtils.lerp(moonMesh.position.y, 19.5, dampFactor);
-        moonHalo.position.y = moonMesh.position.y;
-        moonMesh.scale.setScalar(1.38);
-        moonHalo.scale.setScalar(1.38);
-        targetFogDensity = 0.038;
-        targetExposure = 0.85;
-      } else if (effectiveStage === 'day') {
-        _skyColorTarget.setHex(0x408cbb);
-        _keyColorTarget.setHex(0xfff0d2);
-        _hemiSkyTarget.setHex(0xbedfff);
-        _hemiGroundTarget.setHex(0x293d38);
-        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 3.2, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 1.15, dampFactor);
-        bonfireLight.color.setHex(0xff9933);
-        bonfireLight.intensity = 1.15 * flicker;
-        lampGlowMat.emissiveIntensity = 0.06;
-        moonMat.color.setHex(0xfffbeb);
-        haloMat.color.setHex(0xfef08a);
-        haloMat.opacity = 0.62;
-        moonMesh.position.y = THREE.MathUtils.lerp(moonMesh.position.y, 23.5, dampFactor);
-        moonHalo.position.y = moonMesh.position.y;
-        moonMesh.scale.setScalar(0.95);
-        moonHalo.scale.setScalar(0.95);
-        targetFogDensity = 0.006;
-        targetExposure = 1.15;
-      } else {
-        // Manual dusk preset keeps warm highlights against cool shadows.
-        _skyColorTarget.setHex(0x44385c);
-        _keyColorTarget.setHex(0xffd29a);
-        _hemiSkyTarget.setHex(0x707cb2);
-        _hemiGroundTarget.setHex(0x3a2a35);
-        keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, 2.1, dampFactor);
-        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.95, dampFactor);
-        bonfireLight.color.setHex(0xff6b1a);
-        bonfireLight.intensity = 4.4 * flicker;
-        lampGlowMat.emissiveIntensity = 2.1;
-        moonMat.color.setHex(0xf59e0b);
-        haloMat.color.setHex(0xfbbf24);
-        haloMat.opacity = 0.36;
-        moonMesh.position.y = THREE.MathUtils.lerp(moonMesh.position.y, 18.2, dampFactor);
-        moonHalo.position.y = moonMesh.position.y;
-        moonMesh.scale.setScalar(1.08);
-        moonHalo.scale.setScalar(1.08);
-        targetFogDensity = 0.015;
-        targetExposure = 1.12;
-      }
-
-      const colorLerp = Math.min(1, dampFactor * 0.65);
+      // Interpolate every light property against the same server countdown.
+      _skyColorTarget.setHex(fromLight.sky).lerp(_lightingColorScratch.setHex(toLight.sky), lightMix);
+      _keyColorTarget.setHex(fromLight.key).lerp(_lightingColorScratch.setHex(toLight.key), lightMix);
+      _hemiSkyTarget.setHex(fromLight.hemi).lerp(_lightingColorScratch.setHex(toLight.hemi), lightMix);
+      _hemiGroundTarget.setHex(fromLight.ground).lerp(_lightingColorScratch.setHex(toLight.ground), lightMix);
+      keyDirLight.intensity = THREE.MathUtils.lerp(keyDirLight.intensity, THREE.MathUtils.lerp(fromLight.keyPower, toLight.keyPower, lightMix), lightDamp);
+      hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, THREE.MathUtils.lerp(fromLight.hemiPower, toLight.hemiPower, lightMix), lightDamp);
+      _lightingColorScratch.setHex(fromLight.fire).lerp(_lightingBlendTarget.setHex(toLight.fire), lightMix);
+      bonfireLight.color.lerp(_lightingColorScratch, lightDamp);
+      bonfireLight.intensity = THREE.MathUtils.lerp(bonfireLight.intensity, THREE.MathUtils.lerp(fromLight.firePower, toLight.firePower, lightMix) * flicker, lightDamp);
+      lampGlowMat.emissiveIntensity = THREE.MathUtils.lerp(lampGlowMat.emissiveIntensity, THREE.MathUtils.lerp(fromLight.lamp, toLight.lamp, lightMix), lightDamp);
+      moonMat.color.lerp(_lightingColorScratch.setHex(fromLight.moon).lerp(_lightingBlendTarget.setHex(toLight.moon), lightMix), lightDamp);
+      haloMat.color.lerp(_lightingColorScratch.setHex(fromLight.halo).lerp(_lightingBlendTarget.setHex(toLight.halo), lightMix), lightDamp);
+      haloMat.opacity = THREE.MathUtils.lerp(haloMat.opacity, THREE.MathUtils.lerp(fromLight.haloOpacity, toLight.haloOpacity, lightMix), lightDamp);
+      moonMesh.position.y = THREE.MathUtils.lerp(moonMesh.position.y, THREE.MathUtils.lerp(fromLight.moonY, toLight.moonY, lightMix), lightDamp);
+      moonHalo.position.y = moonMesh.position.y;
+      moonMesh.scale.lerp(_dummyObj.scale.setScalar(THREE.MathUtils.lerp(fromLight.moonScale, toLight.moonScale, lightMix)), lightDamp);
+      moonHalo.scale.copy(moonMesh.scale);
+      const targetFogDensity = THREE.MathUtils.lerp(fromLight.fog, toLight.fog, lightMix);
+      const targetExposure = THREE.MathUtils.lerp(fromLight.exposure, toLight.exposure, lightMix);
+      const colorLerp = transition ? 1 : Math.min(1, dampFactor * 0.65);
       _skyColorCurrent.lerp(_skyColorTarget, colorLerp);
       keyDirLight.color.lerp(_keyColorTarget, colorLerp);
       hemiLight.color.lerp(_hemiSkyTarget, colorLerp);
       hemiLight.groundColor.lerp(_hemiGroundTarget, colorLerp);
-      renderer.toneMappingExposure = THREE.MathUtils.lerp(
-        renderer.toneMappingExposure,
-        targetExposure,
-        colorLerp
-      );
+      renderer.toneMappingExposure = THREE.MathUtils.lerp(renderer.toneMappingExposure, targetExposure, colorLerp);
 
       scene.background = _skyColorCurrent;
       if (scene.fog instanceof THREE.FogExp2) {
@@ -1274,7 +1249,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
       // In first-person the local avatar must not block the head camera
       const localAvatarEntry = avatarMap.get(props.localPlayerId);
       if (localAvatarEntry) {
-        localAvatarEntry.group.visible = props.cameraPreset !== 'first' || deathFocus?.playerId === props.localPlayerId;
+        localAvatarEntry.group.visible = props.cameraPreset !== 'first' || deathFocus?.playerId === props.localPlayerId || (props.phase === 'day_trial' && props.accusedPlayerId === props.localPlayerId);
       }
 
       if (props.isTitleScreen) {
@@ -1331,8 +1306,8 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         _camLookAt.set(pose.lookX, pose.lookY + localY, pose.lookZ);
       }
 
-      if (deathFocus) {
-        const target = avatarMap.get(deathFocus.playerId)?.group;
+      if (deathFocus || (props.phase === 'day_trial' && props.accusedPlayerId)) {
+        const target = avatarMap.get(deathFocus?.playerId ?? props.accusedPlayerId!)?.group;
         if (target) {
           _camTargetPos.set(target.position.x + 4, target.position.y + 3.4, target.position.z + 5);
           _camLookAt.set(target.position.x, target.position.y + 1.4, target.position.z);
@@ -1353,7 +1328,7 @@ export const GothicVillageScene: React.FC<GothicVillageSceneProps> = ({
         bGroup.visible = !(activeOccludedIndices.includes(obsIdx) || nearLiveCam);
       }
 
-      const isPointing = props.cameraPreset === 'first' && !props.isTitleScreen && !deathFocus;
+      const isPointing = props.cameraPreset === 'first' && !props.isTitleScreen && !deathFocus && props.phase !== 'day_trial';
       pointBlend = THREE.MathUtils.lerp(pointBlend, isPointing ? 1 : 0, 1 - Math.exp(-12 * dt));
       pointingHand.visible = isPointing && pointBlend > 0.01;
       if (pointingHand.visible) {

@@ -1,4 +1,5 @@
 import { loadFriends, saveFriend } from '../lib/friendsStore';
+import type { PhaseTransition } from '../game/phaseTransition';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -24,7 +25,6 @@ import {
   UserPlus,
   UserCheck,
   Check,
-  FastForward,
   Ban,
   X,
 } from 'lucide-react';
@@ -47,6 +47,7 @@ import { soundEngine } from '../audio/soundEngine';
 import { renderRoleWoodcutSvg } from './RoleTarotModal';
 
 interface PlayingHudDockProps {
+  phaseTransition?: PhaseTransition | null;
   wsRef: React.MutableRefObject<WebSocket | null>;
   roomCode: string;
   phase: GamePhase;
@@ -92,7 +93,7 @@ interface PlayingHudDockProps {
   onSubmitNightAction: (actionType: string, targetId?: string | null, lovers?: [string, string]) => void;
   onSubmitDayVote: (targetId: string) => void;
   onSubmitTrialVote: (choice: 'kill' | 'save') => void;
-  onResolveTrial: () => void;
+
   onSendChat: (text: string) => void;
   onVoiceStateChange: (isMuted: boolean, isSpeaking: boolean) => void;
 }
@@ -112,6 +113,7 @@ function formatCountdown(secondsLeft: number): string {
 }
 
 export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
+  phaseTransition = null,
   wsRef,
   roomCode,
   phase,
@@ -156,7 +158,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   onSubmitNightAction,
   onSubmitDayVote,
   onSubmitTrialVote,
-  onResolveTrial,
+
   onSendChat,
   onVoiceStateChange,
 }) => {
@@ -550,7 +552,14 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
       </div>
       {/* Bottom HUD Area: Ultra-Compact Icon-First Phase Bar + Mic/Chat Dock */}
       <div ref={bottomDockRef} data-testid="bottom-game-dock" className="w-full max-w-fit mx-auto pointer-events-auto flex flex-col items-center gap-1.5">
-        {!isHudCollapsed && (
+        {phaseTransition && (
+          <div data-testid="phase-transition-countdown" role="status" aria-live="polite" className="flex items-center gap-3 rounded-xl border border-amber-200/40 bg-[#110d19]/95 px-4 py-2 text-sm font-semibold text-amber-100 shadow-lg">
+            <Clock className="h-4 w-4" />
+            <span>{phaseTransition.to === 'day' ? 'Bình minh đang lên' : 'Màn đêm buông xuống'}</span>
+            <span className="text-xl font-mono-tabular">{secondsLeft ?? 5}</span>
+          </div>
+        )}
+        {!isHudCollapsed && !phaseTransition && (
           <>
             {/* 1. Night Phase (60s): Compact Icon-Driven Bar */}
             {phase === 'night' && (
@@ -840,19 +849,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  data-testid="resolve-trial-btn"
-                  title="Phán quyết"
-                  aria-label="Phán quyết"
-                  onClick={() => {
-                    soundEngine.playChurchBell();
-                    onResolveTrial();
-                  }}
-                  className="w-7 h-7 rounded-lg bg-[#9e1b24] hover:bg-[#b91c1c] text-white font-bold shadow flex items-center justify-center cursor-pointer"
-                >
-                  <FastForward className="w-3.5 h-3.5" />
-                </button>
+
               </div>
             )}
           </>

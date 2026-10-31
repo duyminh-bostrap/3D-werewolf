@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, ScrollText, Send, X, Sparkles, Moon, Skull } from 'lucide-react';
+import { MessageSquare, ScrollText, Send, X, Sparkles, Moon, Skull, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '../../server';
 import { isWolfPackRole, type GamePhase, type PlayerState } from '../game/rules';
 
@@ -10,6 +10,7 @@ interface ChatDrawerModalProps {
   phase: GamePhase;
   localPlayer: PlayerState;
   onSendChat: (text: string) => void;
+  onClearConversation: () => void;
   onClose: () => void;
 }
 
@@ -27,6 +28,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
   phase,
   localPlayer,
   onSendChat,
+  onClearConversation,
   onClose,
 }) => {
   const [tab, setTab] = useState<'chat' | 'logs'>('chat');
@@ -66,7 +68,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-[#d4af37]" />
             <h2 className="text-sm font-bold font-display text-white tracking-wide">
-              Thanh Thảo Luận & Nhật Ký Làng
+              Trò chuyện
             </h2>
             {isWolfChannel && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-950/80 border border-red-500/50 text-[10px] font-bold text-red-200">
@@ -91,6 +93,7 @@ export const ChatDrawerModal: React.FC<ChatDrawerModalProps> = ({
           </button>
         </div>
 
+        <button type="button" onClick={onClearConversation} disabled={messages.length === 0} title="Chỉ dọn trên máy bạn" className="mx-3 my-2 flex min-h-9 items-center justify-center gap-2 rounded-lg border border-white/10 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /> Dọn trò chuyện trên máy này</button>
         {/* Sub-tab Switcher (Chat vs Chronicle Logs) */}
         <div className="p-2 bg-[#0c0913] border-b border-white/10 grid grid-cols-2 gap-1.5">
           <button

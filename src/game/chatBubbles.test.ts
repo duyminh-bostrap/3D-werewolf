@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activeChatBubbles, speechLines } from './chatBubbles';
+import { activeChatBubbles, speechLines, visibleChatMessages } from './chatBubbles';
+
+test('completed game system notices stay hidden; clearing chat is local and new messages still arrive', () => {
+  const old = { id: 'old', senderId: 'p', senderName: 'Lan', text: 'Cũ', channel: 'global' as const, timestamp: 100 };
+  const system = { ...old, id: 'system', channel: 'system' as const, timestamp: 110 };
+  const fresh = { ...old, id: 'new', timestamp: 120 };
+  const messages = [old, system, fresh];
+  assert.deepEqual(visibleChatMessages(messages, 'lobby', 0).map((m) => m.id), ['old', 'new']);
+  assert.deepEqual(visibleChatMessages(messages, 'ended', 0).map((m) => m.id), ['old', 'new']);
+  assert.equal(visibleChatMessages(messages, 'night', 0).length, 3);
+  assert.deepEqual(visibleChatMessages(messages, 'night', 110).map((m) => m.id), ['new']);
+  assert.equal(messages.length, 3);
+});
 
 test('chat bubbles show only the newest recent player message and expire after eight seconds', () => {
   const message = { id: '1', senderId: 'p1', senderName: 'Lan', text: 'Xin chào', channel: 'global' as const, timestamp: 10000 };

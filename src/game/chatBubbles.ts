@@ -1,4 +1,9 @@
 import type { ChatMessage } from '../../server';
+import type { GamePhase } from './rules';
+
+export function visibleChatMessages(messages: ChatMessage[], phase: GamePhase, clearedThrough: number): ChatMessage[] {
+  return messages.filter((message) => message.timestamp > clearedThrough && !((phase === 'lobby' || phase === 'ended') && message.channel === 'system'));
+}
 
 export function activeChatBubbles(messages: ChatMessage[], now: number): Map<string, ChatMessage> {
   const bubbles = new Map<string, ChatMessage>();

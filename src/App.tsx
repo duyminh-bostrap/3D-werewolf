@@ -1,3 +1,4 @@
+import { visibleChatMessages } from './game/chatBubbles';
 import { shouldShowGameOver } from './game/gameOver';
 import { BrandMark } from './components/BrandMark';
 import { AccountPanel } from './components/AccountPanel';
@@ -445,6 +446,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shellState, isCustomizerOpen, isFriendsOpen, handleEnterVillage, sendWs, cycleCameraPreset]);
 
+  const [clearedChatThrough, setClearedChatThrough] = useState(0);
+  useEffect(() => setClearedChatThrough(0), [roomCode]);
+  const chatMessages = visibleChatMessages(roomState.messages, roomState.phase, clearedChatThrough);
   const localPlayer = useMemo(() => {
     return (
       roomState.players.find((p) => p.id === localPlayerId) ||
@@ -545,11 +549,13 @@ export default function App() {
         onIntroComplete={() => setIsIntroPlaying(false)}
         phase={roomState.phase}
         players={roomState.players}
-        messages={roomState.messages}
+        messages={chatMessages}
         localPlayerId={localPlayer.id}
         selectedTargetId={selectedTargetId}
         dayVotes={roomState.dayVotes}
         accusedPlayerId={roomState.accusedPlayerId ?? null}
+        phaseTransition={roomState.phaseTransition}
+        phaseEndsAt={roomState.phaseEndsAt}
         cameraPreset={cameraPreset}
         lightingOverride={lightingOverride}
         isWerewolfNightVision={isWerewolfNightVision}
@@ -638,14 +644,15 @@ export default function App() {
           accusedPlayerId={roomState.accusedPlayerId}
           trialVotes={roomState.trialVotes}
           phaseEndsAt={roomState.phaseEndsAt}
+          phaseTransition={roomState.phaseTransition}
           nightCompletedCount={roomState.nightCompletedCount}
           nightRequiredCount={roomState.nightRequiredCount}
           allNightActionsSubmitted={roomState.allNightActionsSubmitted}
           myNightActionRequired={roomState.myNightActionRequired}
           myNightActionSubmitted={roomState.myNightActionSubmitted}
           logs={roomState.logs}
-          messages={roomState.messages}
-          messageCount={roomState.messages.length}
+          messages={chatMessages}
+          messageCount={chatMessages.length}
           isWerewolfNightVision={isWerewolfNightVision}
           isHudCollapsed={isHudCollapsed}
           cameraPreset={cameraPreset}
@@ -682,7 +689,7 @@ export default function App() {
           }
           onSubmitDayVote={(targetId) => sendWs({ type: 'game:submit-vote', targetId })}
           onSubmitTrialVote={(choice) => sendWs({ type: 'game:submit-trial-vote', choice })}
-          onResolveTrial={() => sendWs({ type: 'game:resolve-trial' })}
+
           onSendChat={(text) => sendWs({ type: 'chat:send', text })}
           onVoiceStateChange={(isMuted, isSpeaking) => {
             setRoomState((prev) => ({
@@ -698,8 +705,9 @@ export default function App() {
 
       {/* 1. Thanh Chat Riêng: Dedicated Slide-Over Chat & Chronicle Drawer */}
       <ChatDrawerModal
+        onClearConversation={() => setClearedChatThrough(Math.max(0, ...roomState.messages.map((m) => m.timestamp)))}
         isOpen={isChatDrawerOpen}
-        messages={roomState.messages}
+        messages={chatMessages}
         logs={roomState.logs}
         phase={roomState.phase}
         localPlayer={localPlayer}
@@ -777,6 +785,7 @@ export default function App() {
 
       {/* 5. Chọn Role Theo Số Lượng Người Trong Phòng Riêng: Dedicated Role Config Modal */}
       <RoleConfigModal
+        isHost={localPlayer.isHost}
         isOpen={isRoleConfigOpen}
         isLobby={roomState.phase === 'lobby'}
         playerCount={roomState.maxPlayers ?? roomState.players.length}
