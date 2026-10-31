@@ -1699,7 +1699,8 @@ function createCompactPlayerLabelSprite(
     ctx.fillStyle = isAlive ? '#f8fafc' : '#94a3b8';
   }
   const textLeft = isHost ? 64 : 12;
-  const textRight = isSpeaking && isAlive ? w - 48 : w - 12;
+  const voteSpace = voteCount > 0 ? 56 : 0;
+  const textRight = (isSpeaking && isAlive ? w - 48 : w - 12) - voteSpace;
   if (speech) {
     ctx.textAlign = 'left';
     ctx.font = '600 18px "Be Vietnam Pro", sans-serif';
@@ -1711,6 +1712,17 @@ function createCompactPlayerLabelSprite(
     speechLines(speech).forEach((line, index) => ctx.fillText(line, 18, 62 + index * 30, w - 36));
   } else {
     ctx.fillText(displayName, (textLeft + textRight) / 2, h / 2 + 1, textRight - textLeft);
+  }
+
+  if (voteCount > 0) {
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.arc(w - 34, 36, 23, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 27px "Be Vietnam Pro", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(voteCount), w - 34, 37);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -1750,7 +1762,7 @@ function createCompactPlayerLabelSprite(
     const mic = new THREE.Sprite(new THREE.SpriteMaterial({ map: micTexture, transparent: true, fog: false, toneMapped: false, depthTest: true, depthWrite: false }));
     mic.name = 'speaking_mic';
     mic.scale.set(0.1, speech ? 40 / h : 0.75, 1);
-    mic.position.set(0.41, speech ? 0.5 - 29 / h : 0, 0.01);
+    mic.position.set(0.41 - voteSpace / w, speech ? 0.5 - 29 / h : 0, 0.01);
     mic.renderOrder = 11;
     sprite.add(mic);
   }

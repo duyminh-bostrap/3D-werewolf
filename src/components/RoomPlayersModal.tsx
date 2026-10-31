@@ -230,9 +230,11 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
               return (
                 <div
                   key={p.id}
-                  className={`rounded-xl border px-2.5 py-2 flex items-center justify-between gap-2 ${
-                    isMe
-                      ? 'bg-[#211830] border-[#d4af37]/60'
+                  className={`rounded-xl border-2 px-2.5 py-2 flex items-center justify-between gap-2 transition-colors ${
+                    isLobby
+                      ? p.isHost || p.isReady
+                        ? 'bg-emerald-950/25 border-emerald-400/70'
+                        : 'bg-amber-950/20 border-amber-400/70'
                       : 'bg-[#171322] border-white/10'
                   }`}
                 >
@@ -282,7 +284,7 @@ export const RoomPlayersModal: React.FC<RoomPlayersModalProps> = ({
                                 : 'bg-amber-950/80 text-amber-300'
                             }`}
                           >
-                            {p.isHost ? 'Host' : p.isReady ? 'Sẵn sàng' : 'Chờ'}
+                            {p.isHost || p.isReady ? 'Đã sẵn sàng' : 'Chưa sẵn sàng'}
                           </span>
                         )}
                       </div>

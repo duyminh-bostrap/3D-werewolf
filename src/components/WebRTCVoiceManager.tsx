@@ -1,3 +1,4 @@
+import { canUseVoice, canShareVoice } from '../game/voiceChannel';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWolfPackRole, type GamePhase, type PlayerState, type RoleId } from '../game/rules';
 import { attachMicrophone, MICROPHONE_CONSTRAINTS } from '../audio/voiceCapture';
@@ -34,8 +35,9 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   const [micError, setMicError] = useState('');
   const micStartingRef = useRef(false);
   const mountedRef = useRef(true);
-  const aliveRef = useRef(localIsAlive);
-  aliveRef.current = localIsAlive;
+  const canSpeak = canUseVoice(phase, { role: localRole, isAlive: localIsAlive });
+  const aliveRef = useRef(canSpeak);
+  aliveRef.current = canSpeak;
   const vadNodesRef = useRef<{ source: MediaStreamAudioSourceNode; analyser: AnalyserNode } | null>(null);
   const voiceCallbackRef = useRef(onVoiceStateChange);
   voiceCallbackRef.current = onVoiceStateChange;
@@ -67,12 +69,10 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
     const ids = new Set<string>();
     if (!localIsAlive) return ids;
 
-    const wolvesOnly = phase === 'night';
-    const localIsWolf = isWolfPackRole(localRole);
 
     for (const p of players) {
       if (p.id === localPlayerId || !p.isAlive) continue;
-      if (wolvesOnly && !(localIsWolf && isWolfPackRole(p.role))) continue;
+      if (!canShareVoice(phase, { role: localRole, isAlive: localIsAlive }, p)) continue;
       ids.add(p.id);
     }
     return ids;
@@ -202,11 +202,11 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
 
   // Dead players keep their microphone hard-muted
   useEffect(() => {
-    if (localIsAlive) return;
+    if (canSpeak) return;
     stopCapture();
     setMicPermissionState('idle');
-    if (!isMuted) onVoiceStateChange(true, false);
-  }, [localIsAlive, isMuted, onVoiceStateChange, stopCapture]);
+    reportVoiceState(true, false);
+  }, [canSpeak, reportVoiceState, stopCapture]);
 
   // Expose WebRTC signaling handler on window so App WebSocket listener can route signals cleanly
   useEffect(() => {
@@ -267,7 +267,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
   }, [stopCapture]);
 
   const toggleMicrophone = useCallback(async () => {
-    if (!localIsAlive || micStartingRef.current) return;
+    if (!canSpeak || micStartingRef.current) return;
 
     if (micPermissionState === 'idle') {
       micStartingRef.current = true;
@@ -334,7 +334,7 @@ export const WebRTCVoiceManager: React.FC<WebRTCVoiceManagerProps> = ({
       setMicPermissionState('idle');
       reportVoiceState(true, false);
     }
-  }, [micPermissionState, isMuted, localIsAlive, reportVoiceState, stopCapture, wsRef]);
+  }, [micPermissionState, isMuted, canSpeak, reportVoiceState, stopCapture, wsRef]);
 
   useEffect(() => {
     const onExternalToggle = () => {

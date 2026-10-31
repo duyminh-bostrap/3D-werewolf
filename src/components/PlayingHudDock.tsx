@@ -1,3 +1,4 @@
+import { canUseVoice } from '../game/voiceChannel';
 import { loadFriends, saveFriend } from '../lib/friendsStore';
 import type { PhaseTransition } from '../game/phaseTransition';
 import React, { useEffect, useRef, useState } from 'react';
@@ -214,6 +215,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
   }, [phaseEndsAt]);
 
   const alivePlayers = players.filter((p) => p.isAlive);
+  const canSpeak = canUseVoice(phase, localPlayer);
   const roleMeta = ROLE_CATALOG[localPlayer.role] || ROLE_CATALOG.villager;
 
   const selected3DPlayer = players.find((p) => p.id === selectedTargetId) || null;
@@ -898,26 +900,26 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
             type="button"
             data-testid="priority-mic-btn"
             onClick={() => {
-              if (!localPlayer.isAlive) return;
+              if (!canSpeak) return;
               window.dispatchEvent(new CustomEvent('gothic-toggle-mic'));
             }}
-            disabled={!localPlayer.isAlive}
+            disabled={!canSpeak}
             aria-label={
               !localPlayer.isAlive
                 ? 'Đã ngã xuống - không thể nói'
-                : localPlayer.isMuted
+                : !canSpeak ? 'Ban đêm chỉ phe Sói được nói chuyện riêng' : localPlayer.isMuted
                 ? 'Bật Mic Đàm Thoại'
                 : 'Tắt Mic Đàm Thoại'
             }
             title={
               !localPlayer.isAlive
                 ? 'Người đã chết không thể nói'
-                : localPlayer.isMuted
+                : !canSpeak ? 'Ban đêm chỉ phe Sói được nói chuyện riêng' : localPlayer.isMuted
                 ? 'Bật Mic Voice Chat'
                 : 'Tắt Mic Voice Chat'
             }
             className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-md shrink-0 ${
-              !localPlayer.isAlive
+              !canSpeak
                 ? 'bg-[#161020] border-white/10 text-slate-600 opacity-60 cursor-not-allowed'
                 : 'cursor-pointer transition-all ' +
                   (!localPlayer.isMuted && localPlayer.isSpeaking
@@ -929,7 +931,7 @@ export const PlayingHudDock: React.FC<PlayingHudDockProps> = ({
           >
             {!localPlayer.isAlive ? (
               <Skull className="w-4 h-4 text-slate-500 shrink-0" />
-            ) : localPlayer.isMuted ? (
+            ) : !canSpeak || localPlayer.isMuted ? (
               <MicOff className="w-4 h-4 text-red-400 shrink-0" />
             ) : (
               <Mic className="w-4 h-4 text-emerald-300 shrink-0 animate-pulse" />

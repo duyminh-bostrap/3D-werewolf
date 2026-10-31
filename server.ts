@@ -1,3 +1,4 @@
+import { canUseVoice, canShareVoice } from './src/game/voiceChannel';
 import { deathNotice } from './src/game/deathNotifications';
 import express from 'express';
 import { createServer } from 'http';
@@ -229,7 +230,7 @@ function serializeRoomState(room: ServerRoom, viewerId?: string): RoomPublicStat
     phase: room.phase,
     dayNumber: room.dayNumber,
     maxPlayers: room.maxPlayers ?? 8,
-    players: room.players,
+    players: room.players.map((p) => canShareVoice(room.phase, viewer, p) ? p : { ...p, isMuted: true, isSpeaking: false }),
     roleDeck: room.roleDeck,
     witchState: { ...(room.witchStates?.[viewerId ?? ''] ?? room.witchState), hasAlphaConvert: room.witchState.hasAlphaConvert },
     lastProtectedId: viewer?.role === 'bodyguard' ? room.lastProtectedByPlayer?.[viewer.id] ?? null : null,
@@ -272,15 +273,13 @@ function canPlayerSeeMessage(viewer: PlayerState | undefined, msg: ChatMessage):
 function canHearVoice(room: ServerRoom, listenerId: string, speakerId: string): boolean {
   const listener = room.players.find((p) => p.id === listenerId);
   const speaker = room.players.find((p) => p.id === speakerId);
-  if (!listener || !speaker) return false;
-  if (!listener.isAlive || !speaker.isAlive) return false;
-  if (room.phase === 'night') {
-    return isWolfPackRole(listener.role) && isWolfPackRole(speaker.role);
-  }
-  return true;
+  return canShareVoice(room.phase, listener, speaker);
 }
 
 function broadcastRoomState(room: ServerRoom) {
+  for (const p of room.players) {
+    if (!canUseVoice(room.phase, p)) { p.isMuted = true; p.isSpeaking = false; }
+  }
   if (room.phase === 'lobby') room.maxPlayers = clampRoomPlayerCount(Math.max(room.maxPlayers ?? MIN_ROOM_PLAYERS, room.players.length));
   const phaseKey = `${room.phase === 'day_voting' ? 'day_discussion' : room.phase}:${room.dayNumber}:${room.accusedPlayerId ?? ''}`;
   if (room.lastAnnouncedPhase !== phaseKey) {
@@ -893,26 +892,22 @@ async function startServer() {
             const p = room.players.find((pl) => pl.id === currentPlayerId);
             if (p) {
               // The dead are forced to silence
-              p.isMuted = p.isAlive
+              p.isMuted = canUseVoice(room.phase, p)
                 ? typeof msg.isMuted === 'boolean'
                   ? msg.isMuted
                   : p.isMuted
                 : true;
-              p.isSpeaking = p.isAlive
+              p.isSpeaking = canUseVoice(room.phase, p) && !p.isMuted
                 ? typeof msg.isSpeaking === 'boolean'
                   ? msg.isSpeaking
                   : p.isSpeaking
                 : false;
-              broadcastEvent(
-                room,
-                {
-                  type: 'voice:updated',
-                  playerId: currentPlayerId,
-                  isMuted: p.isMuted,
-                  isSpeaking: p.isSpeaking,
-                },
-                currentPlayerId
-              );
+              for (const [pid, peer] of room.clients) {
+                if (peer.readyState !== WebSocket.OPEN) continue;
+                const visible = canHearVoice(room, pid, currentPlayerId);
+                peer.send(JSON.stringify({ type: 'voice:updated', playerId: currentPlayerId,
+                  isMuted: visible ? p.isMuted : true, isSpeaking: visible ? p.isSpeaking : false }));
+              }
             }
             break;
           }
